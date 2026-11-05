@@ -1,1 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mô hình 3D – Ngoại thất</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#eef0f2;font-family:'Segoe UI',Arial,sans-serif}
+#ui{position:fixed;top:12px;left:12px;background:rgba(255,255,255,.92);padding:10px 14px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:13px;z-index:10;color:#333;max-width:330px}
+#ui h1{font-size:15px;margin:0 0 6px}
+#ui button{margin:6px 4px 0 0;padding:5px 10px;border:1px solid #b9a07c;background:#fff;border-radius:6px;cursor:pointer;font-size:12px}
+#ui button:hover{background:#f6efe4}
+#load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:#555;z-index:5}
+.lbl{background:rgba(45,36,28,.8);color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;text-align:center;white-space:nowrap;pointer-events:none}
+.lbl b{display:block;font-size:13px;font-weight:600}
+canvas{touch-action:none}
+#tg{display:none}
+@media (max-width:800px),(pointer:coarse){
+ #ui{top:auto;bottom:10px;left:8px;right:8px;max-width:none;padding:8px 10px;font-size:12px}
+ #ui h1{font-size:13px;margin:0 0 2px}
+ #ui button{padding:7px 9px;font-size:12px;margin:4px 3px 0 0}
+ #ui.min .body{display:none}
+ #tg{display:inline-block;float:right;margin:0!important}
+ .lbl{font-size:9px;padding:2px 6px}.lbl b{font-size:11px}
+}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="load">Đang tải mô hình… <span id="pct"></span></div>
+<div id="ui">
+  <button id="tg">Ẩn/hiện</button><h1><a href="../" style="color:#8a5a2b;text-decoration:none;font-weight:600">← Chọn</a> · Mô hình 3D – Ngoại thất</h1>
+  <div class="body"><span id="hint">Chuột trái: xoay · Chuột phải: kéo · Cuộn: phóng to</span><br>
+  <button data-v="iso">Góc ISO</button><button data-v="iso2">Góc ISO 2</button><button data-v="top">Từ trên xuống</button><br>
+  <button id="bShadow">Bật/tắt bóng</button><button id="bPng">Lưu ảnh PNG</button></div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
+// ===== Nhãn phòng: [tên, phụ đề, x, z] (mét, theo toạ độ mô hình). Sửa tại đây nếu cần. =====
+const LABELS = []; // mô hình ngoại thất: không đặt nhãn phòng
+
+const params = new URLSearchParams(location.search);
+const SHOT = params.has('shot');
+const MOBILE = matchMedia('(pointer:coarse)').matches || innerWidth < 800;
+if (MOBILE) document.getElementById('hint').textContent = '1 ngón: xoay · 2 ngón: phóng to / kéo';
+document.getElementById('tg').onclick = () => document.getElementById('ui').classList.toggle('min');
+if (SHOT) document.getElementById('ui').style.display = 'none';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.NeutralToneMapping;   // giữ màu vật liệu gần SketchUp
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+const lblR = new CSS2DRenderer(); lblR.setSize(innerWidth, innerHeight);
+lblR.domElement.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none'; document.body.appendChild(lblR.domElement);
+
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef0f2);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
+scene.environmentIntensity = .55;
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d4cc, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.castShadow = true; scene.add(sun, sun.target);
+sun.shadow.mapSize.set(MOBILE ? 2048 : 4096, MOBILE ? 2048 : 4096); sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
+
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, .05, 2000); window.__cam = camera;
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+const C = new THREE.Vector3(); let R = 10;
+const views = {
+  iso: () => camera.position.set(C.x - R * .9, C.y + R * 1.5, C.z + R * 1.3),
+  iso2: () => camera.position.set(C.x + R * .9, C.y + R * 1.5, C.z + R * 1.3),
+  top: () => camera.position.set(C.x, C.y + R * 2.6, C.z + R * .35),
+};
+function setView(v) {
+  views[v]();
+  const fit = Math.max(1, 1.05 / camera.aspect);   // màn hình dọc (điện thoại): lùi camera để thấy trọn nhà
+  camera.position.sub(C).multiplyScalar(fit).add(C);
+  controls.target.copy(C); controls.update();
+}
+document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => setView(b.dataset.v));
+
+// ===== Chỉnh màu theo yêu cầu (đổi theo tên vật liệu trong SketchUp) =====
+function woodCanvas(base, vertical = false) {
+  const S = 1024, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  g.fillStyle = `rgb(${base})`; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 160; i++) {
+    const y = Math.random() * S, a = Math.random() * .16 + .03, f = Math.random() * .02 + .004, ph = Math.random() * 6, amp = Math.random() * 10;
+    g.strokeStyle = Math.random() < .6 ? `rgba(90,55,25,${a})` : `rgba(255,245,225,${a})`; g.lineWidth = Math.random() * 2.5 + .5; g.beginPath();
+    for (let x = 0; x <= S; x += 16) { const yy = y + Math.sin(x * f + ph) * amp; x ? g.lineTo(x, yy) : g.moveTo(x, yy); }
+    g.stroke();
+  }
+  for (let i = 0; i < 1500; i++) { g.fillStyle = `rgba(80,45,20,${Math.random() * .2})`; g.fillRect(Math.random() * S, Math.random() * S, 4 + Math.random() * 14, 1); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+  if (vertical) { t.center.set(.5, .5); t.rotation = Math.PI / 2; }
+  return t;
+}
+const texAnCuong = woodCanvas([224, 198, 164]);          // gỗ công nghiệp An Cường vân sồi sáng
+const texSlat = woodCanvas([208, 170, 126], true);       // vách nan như ảnh v8
+function brighten(t, k) {                                // làm sáng ảnh texture, giữ nguyên cách dán
+  const img = t.image, c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.filter = `brightness(${k}) saturate(.95)`; g.drawImage(img, 0, 0);
+  const n = new THREE.CanvasTexture(c);
+  for (const p of ['flipY', 'wrapS', 'wrapT', 'colorSpace', 'channel', 'rotation']) n[p] = t[p];
+  n.repeat.copy(t.repeat); n.offset.copy(t.offset); n.center.copy(t.center); n.anisotropy = 8;
+  return n;
+}
+const WORSHIP = new Set(['ARC78', '*11', '20200917215535_57147', 'Material #25742', 'Material #2523742235', 'hoa van 2', 'ho phu', 'hoa van 4',
+  'hoa van ban tho 1', 'Material #063', 'hoa van 3', 'dau rong', 'yem ban tho']);
+function applyOverrides(root) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const m = o.material, n = m.name;
+    if (n === 'default_face_material' || n === 'default_face_material255') m.color.set(0xd2cbc1);          // tường tối xuống
+    else if (n === '[Wood Cherry Original]1') { m.map = texSlat; m.color.set(0xffffff); }                   // vách nan tivi
+    else if (n === 'Color A04' || n === 'Material~12') { m.map = texAnCuong; m.color.set(0xffffff); m.roughness = .55; } // sofa, kệ tivi, ghế ăn
+    else if (n === 'Material #-2147483510') m.color.set(0xcdc4b6);                                           // đệm sofa sáng hơn
+    else if (n === 'suade') { m.map = texAnCuong; m.color.set(0xffffff); }                                   // vỏ ghế ăn
+    else if (WORSHIP.has(n)) {                                                                               // phòng thờ sáng lên
+      m.color.set(0xffffff);
+      if (m.map) m.map = brighten(m.map, n === 'ARC78' ? 2.0 : n === '*11' || n === '20200917215535_57147' ? 1.25 : 2.3);
+    }
+    m.needsUpdate = true;
+  });
+  const p = new THREE.PointLight(0xffe2b8, 6, 6, 1.5); p.position.set(43.3, 3.3, -103.7); scene.add(p); // đèn phòng thờ
+}
+
+// ===== Chỉnh màu mô hình ngoại thất v4 (Claude 4.glb) =====
+const V4 = {
+  roof:  { names: ['[Roofing Shingles GAF Estates]1'], color: 0xe6ecf4 },            // ngói xanh sáng lên
+  wall:  { names: ['default_face_material', 'default_face_material85', 'NAP wall white1'], color: 0xd6d3cd }, // tường nhà + tường rào tối đi
+  door:  { names: ['Wood Cherry Original', 'Material10', 'Wood Board Cork'], color: 0xffffff, k: 1.8 }, // cửa gỗ sáng lên
+  doorPanel: { names: ['[Color D05]1'], color: 0xd2a473, k: 1.35 },                          // mặt cánh cửa: ngả màu gỗ
+  step:  { names: ['[Concrete Aggregate Smoke]1'], color: 0xffffff, k: 1.35 },               // đá bậc, hè sáng lên
+  tread: { names: ['[Asphalt New]1'], color: 0xd8c8b0, k: 1.8 },                              // mặt bậc nâu sáng lên
+};
+function applyV4(root) {
+  const done = new Set(), map = {};
+  for (const r of Object.values(V4)) for (const n of r.names) map[n] = r;
+  root.traverse(o => {
+    if (!o.isMesh || done.has(o.material)) return;
+    const m = o.material, r = map[m.name]; done.add(m);
+    if (!r) return;
+    m.color.set(r.color);
+    if (r.k && m.map) m.map = brighten(m.map, r.k);
+    m.needsUpdate = true;
+  });
+}
+
+const labels = [];
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+loader.load(params.get('model') || 'model.glb', g => {
+  const root = g.scene;
+  root.traverse(o => {
+    if (o.isMesh) {
+      o.castShadow = o.receiveShadow = true;
+      const ms = Array.isArray(o.material) ? o.material : [o.material];
+      ms.forEach(m => { m.side = THREE.DoubleSide; if (m.map) m.map.anisotropy = 8; });
+    }
+  });
+  applyV4(root);
+  scene.add(root);
+  const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
+  box.getCenter(C); C.y = box.min.y; R = Math.max(size.x, size.z) * .75;
+  controls.maxDistance = R * 8; controls.minDistance = .3;
+  camera.near = .1; camera.far = R * 20; camera.updateProjectionMatrix();
+  // mặt trời chiếu xiên, vùng bóng phủ toàn nhà
+  sun.position.set(C.x - R * .8, C.y + R * 1.6, C.z + R * .6); sun.target.position.copy(C);
+  Object.assign(sun.shadow.camera, { left: -R * 1.3, right: R * 1.3, top: R * 1.3, bottom: -R * 1.3, near: .1, far: R * 6 });
+  sun.shadow.camera.updateProjectionMatrix();
+  // nền
+  const gnd = new THREE.Mesh(new THREE.PlaneGeometry(R * 12, R * 12), new THREE.MeshStandardMaterial({ color: 0xf2f1ee, roughness: 1 }));
+  gnd.rotation.x = -Math.PI / 2; gnd.position.set(C.x, box.min.y - .08, C.z); gnd.receiveShadow = true; scene.add(gnd);
+  for (const [t, s, x, z, y] of LABELS) {
+    const d = document.createElement('div'); d.className = 'lbl'; d.innerHTML = `<b>${t}</b>${s || ''}`;
+    const o = new CSS2DObject(d); o.position.set(x, y ?? box.min.y + (box.max.y - box.min.y) * .72, z); scene.add(o); labels.push(o);
+  }
+  if (SHOT && !params.has('labels')) labels.forEach(l => l.visible = false);
+  setView(params.get('view') || 'iso');
+  if (params.get('cam')) { const v = params.get('cam').split(',').map(Number); camera.position.set(v[0], v[1], v[2]); controls.target.set(v[3], v[4], v[5]); controls.update(); }
+  document.getElementById('load').remove();
+  window.__ready = true; window.__box = box; window.__root = root;
+}, e => { if (e.total) document.getElementById('pct').textContent = Math.round(e.loaded / e.total * 100) + '%'; },
+  err => { document.getElementById('load').textContent = 'Không tải được mô hình: ' + err.message + ' (hãy mở qua máy chủ web, xem HUONG-DAN.txt)'; });
+
+(document.getElementById('bLbl')||{}).onclick = () => labels.forEach(l => l.visible = !l.visible);
+document.getElementById('bShadow').onclick = () => { sun.castShadow = !sun.castShadow; };
+document.getElementById('bPng').onclick = () => {
+  const p0 = renderer.getPixelRatio(); renderer.setPixelRatio(MOBILE ? 2 : 3); renderer.setSize(innerWidth, innerHeight); renderer.render(scene, camera);
+  const a = document.createElement('a'); a.href = renderer.domElement.toDataURL('image/png'); a.download = 'mo-hinh-3d.png'; a.click();
+  renderer.setPixelRatio(p0); renderer.setSize(innerWidth, innerHeight);
+};
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); lblR.setSize(innerWidth, innerHeight); });
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); lblR.render(scene, camera); });
+</script>
+</body>
+</html>
