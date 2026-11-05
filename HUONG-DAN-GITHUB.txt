@@ -1,0 +1,37 @@
+HƯỚNG DẪN ĐƯA 2 MÔ HÌNH LÊN GITHUB PAGES (dùng chung 1 link)
+=============================================================
+
+Cấu trúc thư mục (giữ nguyên, KHÔNG đổi tên):
+  index.html            trang chọn mô hình (có 2 ảnh để bấm)
+  anh-ngoai-that.jpg    ảnh nhỏ cho trang chọn
+  anh-noi-that.jpg
+  ngoai-that/           mô hình ngoại thất  (index.html + model.glb ~13 MB)
+  noi-that/             mô hình nội thất    (index.html + model-1.glb ~12 MB + model-2.glb ~16 MB)
+  -> Mỗi file đều dưới 25 MB nên GitHub cho tải lên bằng trình duyệt.
+
+CÁCH 1 - DÙNG LẠI KHO CŨ (link cũ giữ nguyên)
+  1. Vào kho cũ trên github.com (ví dụ nha-3d).
+  2. Xoá file model.glb cũ ở thư mục gốc: bấm vào file -> dấu "..." -> Delete file -> Commit.
+     (index.html cũ không cần xoá, sẽ bị ghi đè ở bước 3.)
+  3. Bấm "Add file" -> "Upload files".
+  4. Mở thư mục web-github trên máy, chọn TẤT CẢ bên trong (Ctrl+A: 2 thư mục + 3 file + file hướng dẫn)
+     rồi kéo thả vào trang upload. GitHub giữ nguyên các thư mục con.
+     Lưu ý: dùng Chrome/Edge, kéo thả cả thư mục (không dùng nút "choose your files", nút đó không chọn được thư mục).
+  5. Chờ tải xong hết (thanh tiến trình từng file) -> bấm "Commit changes".
+  6. Chờ 1-2 phút, mở link cũ:  https://TEN-TAI-KHOAN.github.io/nha-3d/
+     -> thấy trang có 2 ô "Ngoại thất" và "Nội thất (cắt nóc)".
+
+CÁCH 2 - TẠO KHO MỚI
+  Làm như hướng dẫn lần trước (New repository -> Public -> Upload files -> Settings > Pages > main / root),
+  chỉ khác là ở bước upload thì kéo thả TOÀN BỘ nội dung thư mục web-github.
+
+XEM TRÊN ĐIỆN THOẠI
+  - Mở link -> bấm ảnh mô hình muốn xem. Nút "← Chọn" ở bảng điều khiển để quay lại trang chọn.
+  - Gửi thẳng từng mô hình cũng được:
+      .../nha-3d/ngoai-that/    và    .../nha-3d/noi-that/
+  - 1 ngón: xoay · 2 ngón chụm/mở: phóng to · 2 ngón kéo: di chuyển.
+  - Lần đầu mở nội thất cần tải ~28 MB, ngoại thất ~13 MB: nên dùng Wi-Fi/4G tốt.
+
+CẬP NHẬT SAU NÀY
+  Chỉ cần vào đúng thư mục (ngoai-that hoặc noi-that) trên GitHub -> Add file -> Upload files
+  -> thả file .glb mới (cùng tên) để ghi đè -> Commit.
