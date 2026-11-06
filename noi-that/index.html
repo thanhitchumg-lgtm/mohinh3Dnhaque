@@ -1,8 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Phối cảnh 3D cắt nóc – Nhà 1 tầng 4 phòng ngủ</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mô hình 3D – Nội thất</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#dde5ea;font-family:'Segoe UI',Arial,sans-serif}
 #ui{position:fixed;top:12px;left:12px;background:rgba(255,255,255,.9);padding:10px 14px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:13px;z-index:10;color:#333}
@@ -11,6 +12,18 @@ html,body{margin:0;height:100%;overflow:hidden;background:#dde5ea;font-family:'S
 #ui button:hover{background:#f6efe4}
 .lbl{background:rgba(45,36,28,.78);color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;text-align:center;white-space:nowrap;pointer-events:none}
 .lbl b{display:block;font-size:13px;font-weight:600}
+canvas{touch-action:none}
+#ui.min .body{display:none}
+#ui.min h1{margin:0}
+#tg{float:right;margin:0 0 0 10px!important}
+#back{display:inline-block;margin:0 8px 0 0;padding:4px 10px;border:1px solid #b9a07c;border-radius:6px;background:#fff;color:#8a5a2b;text-decoration:none;font-size:12px;font-weight:600}
+#back:hover{background:#f6efe4}
+@media (max-width:800px),(pointer:coarse){
+ #ui{top:auto;bottom:10px;left:8px;right:8px;padding:8px 10px;font-size:12px}
+ #ui h1{font-size:13px;margin:0 0 2px}
+ #ui button{padding:7px 9px;font-size:12px;margin:4px 3px 0 0}
+ .lbl{font-size:9px;padding:2px 6px}.lbl b{font-size:11px}
+}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
@@ -19,10 +32,10 @@ html,body{margin:0;height:100%;overflow:hidden;background:#dde5ea;font-family:'S
 </head>
 <body>
 <div id="ui">
-  <h1>Phối cảnh 3D cắt nóc</h1>
-  Chuột trái: xoay · Chuột phải: kéo · Cuộn: phóng to<br>
+  <button id="tg">Ẩn thanh</button><h1><a id="back" href="../">← Trang chọn</a>Mô hình 3D – Nội thất</h1>
+  <div class="body"><span id="hint">Chuột trái: xoay · Chuột phải: kéo · Cuộn: phóng to</span><br>
   <button id="bIso">Góc ISO</button><button id="bIso2">Góc ISO 2</button><button id="bTop">Từ trên xuống</button><br>
-  <button id="bLbl">Ẩn/hiện nhãn</button><button id="bPng">Lưu ảnh PNG (độ phân giải cao)</button>
+  <button id="bLbl">Ẩn/hiện nhãn</button><button id="bPng">Lưu ảnh PNG</button></div>
 </div>
 <script type="module">
 import * as THREE from 'three';
@@ -37,6 +50,9 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 
 const params = new URLSearchParams(location.search);
 const SHOT = params.has('shot');
+const MOBILE = matchMedia('(pointer:coarse)').matches || innerWidth < 800;
+if (MOBILE) document.getElementById('hint').textContent = '1 ngón: xoay · 2 ngón: phóng to / kéo';
+document.getElementById('tg').onclick = e => { const u = document.getElementById('ui'); u.classList.toggle('min'); e.target.textContent = u.classList.contains('min') ? 'Hiện thanh' : 'Ẩn thanh'; };
 if (SHOT) document.getElementById('ui').style.display = 'none';
 
 // ---- Toạ độ: 100 px trên bản vẽ = 1 m ----
@@ -46,7 +62,7 @@ const HC = 1.0;     // tường phía trước bị cắt
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -584,7 +600,7 @@ scene.add(new THREE.HemisphereLight(0xffeedd, 0xa8865e, 0.75));
 const C = new THREE.Vector3(X(930), 0, Z(440));
 const sun = new THREE.DirectionalLight(0xffdcae, 3.6);
 sun.position.set(C.x - 12, 13, C.z + 3); sun.target.position.copy(C); scene.add(sun.target); scene.add(sun);
-sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+sun.castShadow = true; sun.shadow.mapSize.set(MOBILE ? 2048 : 4096, MOBILE ? 2048 : 4096);
 Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 50 });
 sun.shadow.bias = -.0003; sun.shadow.normalBias = .03; sun.shadow.radius = 4;
 // đèn LED âm trần (ấm)
@@ -614,14 +630,14 @@ const views = {
   iso2: () => camera.position.set(C.x + 8, 23, C.z + 13),
   top: () => camera.position.set(C.x, 30, C.z + 3),
 };
-function setView(v) { views[v](); controls.target.copy(C); controls.update(); }
-setView(params.get('view') || 'front');
+function setView(v) { views[v](); const fit = Math.max(1, 1.6 / camera.aspect); camera.position.sub(C).multiplyScalar(fit).add(C); controls.target.copy(C); controls.update(); }
+setView(params.get('view') || (MOBILE ? 'iso' : 'front'));
 document.getElementById('bIso').onclick = () => setView('iso');
 document.getElementById('bIso2').onclick = () => setView('iso2');
 document.getElementById('bTop').onclick = () => setView('top');
 document.getElementById('bLbl').onclick = () => labels.forEach(l => l.visible = !l.visible);
 document.getElementById('bPng').onclick = () => {
-  const pr0 = renderer.getPixelRatio(); renderer.setPixelRatio(3); renderer.setSize(innerWidth, innerHeight);
+  const pr0 = renderer.getPixelRatio(); renderer.setPixelRatio(MOBILE ? 2 : 3); renderer.setSize(innerWidth, innerHeight);
   renderer.render(scene, camera);
   const a = document.createElement('a'); a.href = renderer.domElement.toDataURL('image/png'); a.download = 'phoi-canh-3d.png'; a.click();
   renderer.setPixelRatio(pr0); renderer.setSize(innerWidth, innerHeight);
@@ -632,7 +648,7 @@ addEventListener('resize', () => {
 });
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-if (!params.has('noao')) { const ao = new GTAOPass(scene, camera, innerWidth, innerHeight); ao.updateGtaoMaterial({ radius: .6, distanceExponent: 1, thickness: 1, scale: 1.2 }); composer.addPass(ao); }
+if (!params.has('noao') && !MOBILE) { const ao = new GTAOPass(scene, camera, innerWidth, innerHeight); ao.updateGtaoMaterial({ radius: .6, distanceExponent: 1, thickness: 1, scale: 1.2 }); composer.addPass(ao); }
 composer.addPass(new OutputPass());
 addEventListener('resize', () => composer.setSize(innerWidth, innerHeight));
 renderer.setAnimationLoop(() => { controls.update(); composer.render(); lblR.render(scene, camera); });
