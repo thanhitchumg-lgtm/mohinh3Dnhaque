@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="utf-8">
@@ -195,17 +195,18 @@ function keyRugCanvas() { // thảm be viền hoa văn chữ Vạn
   for (let y = 60; y < 580; y += 36) { key(24, y); key(458, y); }
   return c;
 }
-function stoneCanvas() { // đá lát hiên ghép tấm
+function stoneCanvas(base = [158, 159, 161]) { // đá granite nguyên tấm, mài mờ, không ron
   const S = 1024, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
-  g.fillStyle = '#8f877c'; g.fillRect(0, 0, S, S);
-  for (let y = 0; y < S; y += 128) {
-    let x = -Math.random() * 200;
-    while (x < S) {
-      const w = 160 + Math.random() * 220, v = Math.random() * 26 - 13;
-      g.fillStyle = `rgb(${196 + v | 0},${186 + v | 0},${170 + v | 0})`; g.fillRect(x + 3, y + 3, w - 6, 122);
-      for (let k = 0; k < 160; k++) { g.fillStyle = `rgba(${Math.random() < .5 ? '120,110,95' : '235,228,215'},${Math.random() * .18})`; g.fillRect(x + Math.random() * w, y + Math.random() * 128, 3 + Math.random() * 10, 2 + Math.random() * 5); }
-      x += w;
-    }
+  g.fillStyle = `rgb(${base[0]},${base[1]},${base[2]})`; g.fillRect(0, 0, S, S);
+  for (let k = 0; k < 9; k++) { // vân mây rất nhẹ, liền mạch
+    const x = Math.random() * S, y = Math.random() * S, r = 200 + Math.random() * 300;
+    const gr = g.createRadialGradient(x, y, 10, x, y, r); const d = Math.random() < .5 ? '0,0,0' : '255,255,255';
+    gr.addColorStop(0, `rgba(${d},.05)`); gr.addColorStop(1, `rgba(${d},0)`); g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  }
+  for (let k = 0; k < 26000; k++) { // hạt granite
+    const r = Math.random();
+    g.fillStyle = r < .45 ? `rgba(60,56,52,${Math.random() * .45})` : r < .85 ? `rgba(245,243,238,${Math.random() * .5})` : `rgba(20,18,16,${Math.random() * .4})`;
+    g.fillRect(Math.random() * S, Math.random() * S, 1 + Math.random() * 3, 1 + Math.random() * 3);
   }
   return c;
 }
@@ -327,24 +328,53 @@ function wall(along, t1, t2, s1, s2, h, ops = []) {
 // ---------- Nền, sân, cảnh quan ----------
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 60), mGrass);
 ground.rotation.x = -Math.PI / 2; ground.position.set(X(900), -.75, Z(440)); ground.receiveShadow = true; scene.add(ground);
-pr(138, 10, 1690, 870, -.75, .748, mSlab);                       // bệ nhà
+pr(138, 10, 1690, 866, -.75, .748, mSlab);                       // bệ nhà: mép phải bằng mép tường mặt tiền
+// gạch thẻ ốp chân nhà dọc mép phải, từ bệ cột tới cuối nhà
+function brickCanvas() { // gạch thẻ 24x6 cm, tông xám trắng lẫn nâu đỏ (ảnh phủ 1 m)
+  const S = 1024, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  g.fillStyle = '#9d978f'; g.fillRect(0, 0, S, S);                   // mạch vữa
+  const bw = S / 4, bh = S / 16;
+  for (let r = 0; r < 16; r++) for (let i = -1; i < 5; i++) {
+    const x = i * bw + (r % 2 ? bw / 2 : 0), y = r * bh, t = Math.random();
+    const base = t < .55 ? [208, 205, 200] : t < .8 ? [178, 172, 166] : t < .93 ? [168, 132, 118] : [226, 222, 216];
+    const v = Math.random() * 18 - 9;
+    g.fillStyle = `rgb(${base[0] + v | 0},${base[1] + v | 0},${base[2] + v | 0})`; g.fillRect(x + 4, y + 4, bw - 8, bh - 8);
+    for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(${Math.random() < .5 ? '120,70,60' : '90,88,85'},${Math.random() * .35})`; g.fillRect(x + 4 + Math.random() * (bw - 10), y + 4 + Math.random() * (bh - 10), 2 + Math.random() * 6, 2 + Math.random() * 3); }
+  }
+  return c;
+}
+const mBrick = M({ map: tex(brickCanvas(), 1, 1), roughness: .85 });
+pr(18, 866, 1690, 867, -.75, .748, mBrick, false);   // mặt gạch phẳng với mép tường và bệ cột
 // sàn gỗ toàn nhà (như ảnh mẫu): ván dài, màu sồi ấm
-const woodFloorC = woodCanvas({ rows: 14, base: [168, 120, 80], vary: 7, grain: 70, size: 2048 });
-const wF = (x1, y1, x2, y2) => M({ map: tex(woodFloorC, (X(x2) - X(x1)) / 2.4, (Z(y2) - Z(y1)) / 2.4), roughness: .45 });
-floorRect(225, 10, 600, 405, wF(225, 10, 600, 405));              // phòng thờ
-floorRect(600, 10, 1685, 413, wF(600, 10, 1685, 413));            // dãy phòng ngủ
-floorRect(335, 413, 1685, 843, wF(335, 413, 1685, 843));          // khách - bếp - PN4
+// sàn: phòng thờ gỗ tối, còn lại gạch porcelain màu kem khổ lớn (như ảnh mẫu 2)
+const wDark = M({ map: tex(woodCanvas({ rows: 14, base: [168, 120, 80], vary: 7, grain: 70, size: 2048 }), (X(600) - X(225)) / 2.4, (Z(405) - Z(10)) / 2.4), roughness: .4 });
+const TILE = (Z(843) - Z(413)) / 4;               // 4 viên hết chiều rộng phòng khách (~1.07 m)
+const tileC = floorTileCanvas();
+const wF = (x1, y1, x2, y2) => M({ map: tex(tileC, (X(x2) - X(x1)) / (2 * TILE), (Z(y2) - Z(y1)) / (2 * TILE)), roughness: .25, color: 0xfffaf2 });
+floorRect(225, 10, 600, 405, wDark);                               // phòng thờ: gỗ tối
+floorRect(600, 10, 1685, 413, wF(600, 10, 1685, 413));            // dãy phòng ngủ: gạch
+floorRect(335, 413, 1685, 843, wF(335, 413, 1685, 843));          // khách - bếp - PN4: gạch
 floorRect(310, 505, 335, 771, wF(310, 505, 335, 771), .0015);     // ngưỡng cửa sảnh
 floorRect(812, 843, 938, 867, wF(812, 843, 938, 867), .0015);     // ngưỡng cửa chính
 floorRect(225, 405, 600, 413, wF(225, 405, 600, 413), .0015);
 const stoneC = stoneCanvas();
-const mStone = M({ map: tex(stoneC, (X(310) - X(138)) / 2, (Z(867) - Z(10)) / 2, Math.PI / 2), roughness: .8 });
-mSlab.map = tex(stoneC, 1, 1); mSlab.color.set(0xffffff);       // bậc tam cấp cùng đá
+const mStone = M({ map: tex(stoneC, (X(310) - X(138)) / 1.2, (Z(867) - Z(10)) / 1.2), roughness: .6 });
+mSlab.map = tex(stoneC, 1 / 1.2, 1 / 1.2); mSlab.color.set(0xffffff); mSlab.roughness = .6;
+const mBrownStone = M({ map: tex(stoneCanvas([68, 50, 34]), 1 / 1.2, 1 / 1.2), roughness: .5 });   // đá nâu dải giữa bậc       // bậc tam cấp cùng đá
 floorRect(138, 10, 225, 413, mStone, .003);
 floorRect(138, 413, 310, 867, mStone, .003);
 // bậc tam cấp
 // 5 bậc từ sân lên hiên (mỗi bậc cao 15 cm, sâu 30 cm)
-for (const [a, b] of [[85, 340], [500, 780]]) for (let k = 1; k <= 4; k++) pr(138 - 30 * (5 - k), a, 138, b, -.75, .15 * k, mSlab);
+// 5 bậc ốp đá: viền đá xám 2 bên, dải đá nâu ở giữa chạy từ bậc dưới lên hết sàn hiên tới cửa
+const STAIRS = [[85, 340, 122, 302, 225], [495, 787, 562, 718, 310]];   // [đầu, cuối, dải nâu từ, đến, tường cửa]
+for (const [a, b, s1, s2, door] of STAIRS) {
+  for (let k = 1; k <= 4; k++) {
+    const x1 = 138 - 30 * (5 - k);
+    pr(x1, a, 138, s1, -.75, .15 * k, mSlab); pr(x1, s1, 138, s2, -.75, .15 * k, mBrownStone); pr(x1, s2, 138, b, -.75, .15 * k, mSlab);
+  }
+  pr(137.4, s1, 138, s2, -.15, .148, mBrownStone, false);              // cổ bậc trên cùng (mặt bệ nhà)
+  floorRect(138, s1, door, s2, mBrownStone, .005);                      // dải nâu trên sàn hiên tới cửa
+}
 function tree(px, py, s = 1, x, z) {
   const g = new THREE.Group(); g.position.set(x ?? X(px), 0, z ?? Z(py)); scene.add(g);
   cyl(.06 * s, 1.2 * s, mWalnut, 0, -.3 + .6 * s, 0, g, 8);
@@ -374,7 +404,20 @@ function plant(px, py, s = 1, potH = .35) {
   }
 }
 // bồn cây trước sảnh
-for (const [a, b] of [[420, 495], [787, 860]]) { pr(65, a, 138, b, -.75, .75 + H, mWall); pr(65, a, 138, b, H, .015, mCap, false); } // 2 cột cao bằng tường
+// 2 bên bậc lên phòng khách: bệ đá xây cao (má bậc) chạy dọc bậc, cột đứng trên bệ sát mép hiên, chậu cây đặt đầu bệ
+const mMarbleD = M({ color: 0x6b6862, roughness: .35 });
+const mInset = M({ color: 0x8c918d, roughness: .3 });
+for (const [a, b] of [[420, 495], [787, 866]]) {                         // bệ phải: mép ngoài trùng mép sảnh và mép nhà
+  pr(18, a, 138, b, -.75, .75, mSlab);                                 // bệ đá: mặt bằng cốt sảnh
+  const cy = a + 37.5;                                                 // tâm cột giữ như cũ
+  pr(83, cy - 30, 141, cy + 30, 0, .42, mMarbleD);                     // chân cột đá tối
+  pr(80, cy - 33, 144, cy + 33, .42, .05, mMarbleD);                   // gờ chân cột
+  pr(88, cy - 24, 136, cy + 24, .47, H - .47, mWall);                  // thân cột trắng cao bằng tường
+  pr(85, cy - 27, 139, cy + 27, H, .04, mCap, false);
+  cyl(.2, .4, mPot, X(48), .2, Z(cy), scene, 28, .22); plantSoil(48, cy, .4, 1.2);     // chậu cây đầu bệ
+}
+// 2 chậu hoa đặt dưới sân, trong 2 hõm 2 bên 5 bậc lên phòng thờ
+for (const py of [47, 380]) { cyl(.2, .45, mPot, X(70), -.75 + .225, Z(py), scene, 28, .23); plantSoil(70, py, -.3, 1.3); }
 // bồn cây đá ngoài hiên (như ảnh mẫu)
 const mPlanter = M({ color: 0xa79d90, roughness: .85 });
 function planter(x1, y1, x2, y2, n) {
@@ -393,9 +436,7 @@ function plantSoil(px, py, y0, s) { // bụi cây trồng trong bồn
     m.scale.set(sc, sc, sc); m.rotation.set(0, i * 2.4, 0); m.rotateX(-(.2 + Math.random() * .9)); m.castShadow = true; g.add(m);
   }
 }
-planter(150, 20, 222, 140, 2);      // góc hiên trước phòng thờ
-planter(150, 420, 222, 495, 1);     // cạnh cột trên
-planter(150, 787, 222, 860, 1);     // cạnh cột dưới
+// (đã bỏ bồn hoa ở sảnh phòng thờ)
 plant(400, 480, 1.6, .45);          // cây lớn góc kệ tivi
 plant(362, 812, 1.0, .35);          // cây nhỏ đầu sofa
 plant(722, 782, 1.35, .42);          // cây lớn cuối sofa
@@ -554,6 +595,8 @@ bx(.4, .34, .12, mSofaGrey2, X(655), .66, Z(795)).rotation.set(-.3, -.5, -.2);
   pr(x1 + 5, y1, x2, y2, .14, .3, mSofaGrey); pr(x2 - 14, y1, x2, y2, .14, .7, mSofaGrey2);   // đệm + lưng
   for (const y of [y1, y2 - 7]) pr(x1, y, x2, y + 7, .42, .2, mOak);                             // tay gỗ
 })();
+// thảm phòng khách viền hoa văn dưới bàn trà
+floorRect(485, 617, 683, 752, M({ map: tex(keyRugCanvas(), 1, 1, Math.PI / 2), roughness: 1, color: 0xc2a888 }), .006);
 // bàn trà gỗ sồi
 pr(517, 652, 614, 706, .4, .05, mOak);
 for (const [a, b] of [[522, 657], [609, 657], [522, 701], [609, 701]]) pr(a - 3, b - 3, a + 3, b + 3, 0, .4, mOak);
@@ -632,6 +675,7 @@ const views = {
 };
 function setView(v) { views[v](); const fit = Math.max(1, 1.6 / camera.aspect); camera.position.sub(C).multiplyScalar(fit).add(C); controls.target.copy(C); controls.update(); }
 setView(params.get('view') || (MOBILE ? 'iso' : 'front'));
+if (params.get('cam')) { const v = params.get('cam').split(',').map(Number); camera.position.set(v[0], v[1], v[2]); controls.target.set(v[3], v[4], v[5]); controls.update(); }
 document.getElementById('bIso').onclick = () => setView('iso');
 document.getElementById('bIso2').onclick = () => setView('iso2');
 document.getElementById('bTop').onclick = () => setView('top');
