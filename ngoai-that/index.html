@@ -70,6 +70,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 // ===== Nhãn phòng: [tên, phụ đề, x, z] (mét, theo toạ độ mô hình). Sửa tại đây nếu cần. =====
 const LABELS = []; // mô hình ngoại thất: không đặt nhãn phòng
@@ -212,8 +213,32 @@ function tileMesh(tris, y) {                               // tris: mảng [x,z]
   const m = new THREE.Mesh(g, mTile); m.receiveShadow = true; return m;
 }
 
+// ===== Gạch thẻ ốp chân nhà mặt trước (dày 1 cm, phủ lên dải mặt bị chồng hình gây nháy) =====
+function brickTex() { // gạch thẻ 24×6 cm, tông xám trắng lẫn nâu đỏ (giống bên nội thất), ảnh phủ 2 m ngang × 1 m cao
+  const S = 1024, c = document.createElement('canvas'); c.width = 2 * S; c.height = S; const g = c.getContext('2d');
+  g.fillStyle = '#5f5d5a'; g.fillRect(0, 0, 2 * S, S);                 // mạch vữa (sẫm, hợp với gạch lát sân)
+  const bw = S / 4, bh = S / 16;
+  for (let r = 0; r < 16; r++) for (let i = -1; i < 9; i++) {
+    const x = i * bw + (r % 2 ? bw / 2 : 0), y = r * bh, t = Math.random();
+    const base = t < .55 ? [122, 124, 128] : t < .8 ? [100, 102, 107] : t < .93 ? [118, 96, 88] : [140, 141, 144];   // xám sẫm ngả xanh nhẹ
+    const v = Math.random() * 16 - 8;
+    g.fillStyle = `rgb(${base[0] + v | 0},${base[1] + v | 0},${base[2] + v | 0})`; g.fillRect(x + 4, y + 4, bw - 8, bh - 8);
+    for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(${Math.random() < .5 ? '70,50,45' : '45,47,50'},${Math.random() * .35})`; g.fillRect(x + 4 + Math.random() * (bw - 10), y + 4 + Math.random() * (bh - 10), 2 + Math.random() * 6, 2 + Math.random() * 3); }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; return t;
+}
+function cladding(x0, x1, y0, y1, z, th) {               // tấm ốp: mặt trước tại z + th, UV theo mét
+  const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, th); g.translate((x0 + x1) / 2, (y0 + y1) / 2, z + th / 2);
+  const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), zz = p.getZ(i);
+    if (Math.abs(n.getZ(i)) > .5) uv.setXY(i, x / 2, y); else if (Math.abs(n.getX(i)) > .5) uv.setXY(i, zz / 2, y); else uv.setXY(i, x / 2, zz);
+  }
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: brickTex(), roughness: .85 })); m.castShadow = m.receiveShadow = true; return m;
+}
+
 // ===== Lớp phòng thờ 2 + thay mặt sân trống bằng gạch =====
-const LAYER = { tho2: [] }, LAYER_OFF = { tho2: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
+const LAYER = { tho2: [], tudong: [], xemay: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
 const ROOM = { x0: 31.75, x1: 36.85, z0: -85.95, z1: -80.9 }; // vùng phòng thờ 2 (m)
 // tường rào bên trái (đoạn chung với phòng thờ 2): mặt ngoài A→B, mặt trong C→D
 const FA = [31.723, -80.835], FB = [32.296, -85.127], FC = [31.849, -80.948];
@@ -264,9 +289,74 @@ function splitModel(root) {
   const tri = THREE.ShapeUtils.triangulateShape(YARD.map(([x, z]) => new THREE.Vector2(x, z)), []);
   scene.add(tileMesh(tri.flatMap(t => t.map(i => [YARD[i][0], -.012, YARD[i][1]]))));
 }
+// tách mọi tam giác nằm trọn trong 1 hộp (trừ vật liệu tường, nền) thành lớp riêng — dùng cho tủ đông
+function boxLayer(root, key, b0, b1, skip) {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3(new THREE.Vector3(...b0), new THREE.Vector3(...b1)), V = new THREE.Vector3(), meshes = [];
+  root.traverse(o => { if (o.isMesh && !skip.includes(o.material.name)) meshes.push(o); });
+  for (const o of meshes) {
+    o.geometry.computeBoundingBox();
+    if (!o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).intersectsBox(box)) continue;
+    const g = o.geometry, p = g.attributes.position, idx = g.index.array, keep = [], take = [];
+    for (let t = 0; t < idx.length; t += 3) {
+      let inside = true;
+      for (let k = 0; k < 3 && inside; k++) { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); inside = box.containsPoint(V); }
+      (inside ? take : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!take.length) continue;
+    g.setIndex(keep);
+    const g2 = new THREE.BufferGeometry(); for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.setIndex(take);
+    const m2 = new THREE.Mesh(g2, o.material); m2.castShadow = m2.receiveShadow = true;
+    m2.position.copy(o.position); m2.quaternion.copy(o.quaternion); m2.scale.copy(o.scale); o.parent.add(m2); LAYER[key].push(m2);
+  }
+}
+
+// ===== Xe máy tay ga (dựng bằng khối đơn giản), đầu xe theo trục +x =====
+function scooter(main, trim) {
+  const grp = new THREE.Group();
+  const M = (c, r = .45, m = .1) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
+  const mMain = M(main, .3, .15), mTrim = M(trim, .35, .3), mBlack = M(0x1b1c1e, .7), mTyre = M(0x151515, .9), mChrome = M(0xc9cdd2, .25, .8);
+  const add = (geo, mat, x, y, z, rz = 0, rx = 0, ry = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = m.receiveShadow = true; grp.add(m); return m; };
+  const rb = (lx, ly, lz, r) => new RoundedBoxGeometry(lx, ly, lz, 3, r);
+  const cyl = (r, h, r2 = r) => new THREE.CylinderGeometry(r2, r, h, 20);
+  for (const x of [.64, -.64]) {                                            // bánh xe
+    add(new THREE.TorusGeometry(.215, .062, 12, 32), mTyre, x, .277, 0);
+    add(cyl(.17, .07), mChrome, x, .277, 0, 0, Math.PI / 2);
+    add(cyl(.05, .1), mBlack, x, .277, 0, 0, Math.PI / 2);
+  }
+  add(rb(.72, .34, .32, .12), mMain, -.32, .6, 0);                          // thân sau
+  add(rb(.3, .24, .26, .1), mMain, -.74, .66, 0);                           // đuôi xe thon lại
+  add(rb(.5, .12, .3, .05), mTrim, -.62, .58, 0);                           // ốp hông
+  add(rb(.82, .1, .3, .05), mBlack, -.36, .81, 0);                          // yên
+  add(rb(.3, .05, .32, .02), mBlack, -.85, .79, 0);                         // baga sau
+  add(rb(.45, .08, .32, .03), mBlack, .24, .33, 0);                         // sàn để chân
+  add(rb(.09, .66, .36, .04), mMain, .54, .66, 0, -.3);                     // yếm trước
+  add(rb(.05, .5, .3, .02), mBlack, .47, .62, 0, -.3);                      // ốp trong yếm (màu tối)
+  add(rb(.36, .07, .14, .03), mMain, .66, .55, 0, .12);                     // dè trước
+  add(cyl(.026, .36), mChrome, .6, .44, .05, .28);                          // phuộc trước (phần lộ dưới yếm)
+  add(cyl(.026, .36), mChrome, .6, .44, -.05, .28);
+  add(rb(.24, .12, .4, .05), mMain, .48, 1.03, 0);                          // đầu xe
+  add(rb(.06, .07, .24, .03), M(0xfff6dc, .2, .1), .61, 1.03, 0);           // đèn pha
+  add(cyl(.016, .62), mBlack, .44, 1.08, 0, 0, Math.PI / 2);                // tay lái
+  for (const z of [.27, -.27]) {
+    add(cyl(.022, .12), mBlack, .44, 1.08, z, 0, Math.PI / 2);              // tay nắm
+    add(cyl(.008, .2), mChrome, .42, 1.18, z * .85, 0, .3 * Math.sign(z));  // cần gương
+    add(new THREE.SphereGeometry(.045, 16, 10).scale(.35, .7, 1.1), mBlack, .4, 1.27, z * .95);
+  }
+  add(rb(.5, .14, .16, .05), M(0x3a3c40, .6, .3), -.42, .3, -.08);          // máy, càng sau
+  add(cyl(.03, .42), mChrome, -.5, .33, .17, Math.PI / 2 + .1);             // ống xả
+  add(rb(.04, .06, .2, .02), M(0xc0161c, .3), -.86, .66, 0);                // đèn hậu
+  return grp;
+}
+function addScooters() {
+  const s1 = scooter(0xb51f2a, 0x202124), s2 = scooter(0x24262a, 0xb9bec5);
+  s1.position.set(44.45, 0, -83.5); s2.position.set(44.5, 0, -82.6);
+  for (const s of [s1, s2]) { scene.add(s); LAYER.xemay.push(s); }
+}
+
 function setLayer(k, v) { LAYER[k].forEach(m => m.visible = v); LAYER_OFF[k].forEach(m => m.visible = !v); }
 // ---------- Bảng ẩn / hiện lớp (thêm lớp mới: thêm vào LAYERS và LAYER) ----------
-const LAYERS = [['tho2', 'Phòng thờ 2']];
+const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy']];
 function initLayers() {
   const box = document.getElementById('layers'), list = document.getElementById('lyList'), btn = document.getElementById('bLayer');
   const hide0 = (params.get('hide') || '').split(',');
@@ -296,6 +386,10 @@ loader.load(params.get('model') || 'model.glb', g => {
   applyV4(root);
   scene.add(root);
   splitModel(root);
+  scene.add(cladding(39.49, 55.14, 0, .748, -84.338, .01));  // chân nhà mặt trước: từ hiên trái đến lối đi bên phải
+  boxLayer(root, 'tudong', [49.6, .595, -84.36], [50.8, 1.45, -83.74],   // tủ đông dưới cửa sổ bếp
+    ['default_face_material', '<DarkGray>1', 'Concrete Aggregate Smoke', 'Brick Tumbled', 'Rough Square Concrete Block']);
+  addScooters();
   initLayers();
   const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
   box.getCenter(C); C.y = box.min.y; R = Math.max(size.x, size.z) * .75;
