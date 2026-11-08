@@ -239,7 +239,7 @@ function cladBox(x0, x1, y0, y1, z0, z1) {               // tấm ốp gạch th
 }
 
 // ===== Lớp phòng thờ 2 + thay mặt sân trống bằng gạch =====
-const LAYER = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
+const LAYER = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
 const ROOM = { x0: 31.75, x1: 36.85, z0: -85.95, z1: -80.9 }; // vùng phòng thờ 2 (m)
 // tường rào bên trái (đoạn chung với phòng thờ 2): mặt ngoài A→B, mặt trong C→D
 const FA = [31.723, -80.835], FB = [32.296, -85.127], FC = [31.849, -80.948];
@@ -552,9 +552,68 @@ function addTinRoof() {
   m.castShadow = m.receiveShadow = true; scene.add(m); LAYER.maiton.push(m);
 }
 
+// ===== Lớp tường rào + cổng, lớp WC, gạch thẻ trên cửa phòng thờ sáng hơn, mặt tiền trắng hơn =====
+function splitTris(root, key, testTri, skipSet) {                          // tách tam giác thoả testTri(P, mesh) thành lớp key
+  root.updateMatrixWorld(true);
+  const V = new THREE.Vector3(), meshes = [];
+  root.traverse(o => { if (o.isMesh && o.geometry.index && !skipSet.has(o)) meshes.push(o); });
+  for (const o of meshes) {
+    const g = o.geometry, p = g.attributes.position, idx = g.index.array, keep = [], take = [];
+    for (let t = 0; t < idx.length; t += 3) {
+      const P = [0, 1, 2].map(k => { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); return [V.x, V.y, V.z]; });
+      (testTri(P, o) ? take : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!take.length) continue;
+    g.setIndex(keep);
+    const g2 = new THREE.BufferGeometry(); for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.setIndex(take);
+    const m2 = new THREE.Mesh(g2, o.material); m2.castShadow = m2.receiveShadow = true;
+    m2.position.copy(o.position); m2.quaternion.copy(o.quaternion); m2.scale.copy(o.scale); o.parent.add(m2); LAYER[key].push(m2); skipSet.add(m2);
+  }
+}
+function layersFenceWC(root) {
+  const used = new Set(Object.values(LAYER).flat());
+  // --- WC (khối nhô ra tường rào trước, có bể nước trên mái): mọi thứ nằm trọn trong khối
+  const inWC = q => q[0] > 48.15 && q[0] < 51.6 && q[2] > -82.7 && q[2] < -79.2 && q[1] > -.05 && q[1] < 6.3;
+  splitTris(root, 'wc', P => P.every(inWC), used);
+  // nền WC tràn hết khối: lấp đáy từ sàn WC (cốt 0.6) xuống bằng đáy nền sân, màu tường rào
+  let wallMat = null; root.traverse(o => { if (o.isMesh && o.material.name === 'default_face_material' && o.material.color.getHex() !== CREAM && !wallMat) wallMat = o.material; });
+  const W = [[48.29, -81.48], [48.48, -79.33], [51.47, -79.72], [51.16, -82.09], [51.24, -82.64], [48.25, -82.64]];
+  const cx = W.reduce((s, p) => s + p[0], 0) / W.length, cz = W.reduce((s, p) => s + p[1], 0) / W.length;
+  const Wi = W.map(([x, z]) => { const dx = cx - x, dz = cz - z, l = Math.hypot(dx, dz); return [x + dx / l * .03, z + dz / l * .03]; });  // lùi vào 3 cm: mép khuất sau chân tường
+  const shape = new THREE.Shape(Wi.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: .6 - .005 + .012, bevelEnabled: false }), wallMat);
+  slab.rotation.x = -Math.PI / 2; slab.position.y = -.012; slab.castShadow = slab.receiveShadow = true; scene.add(slab); LAYER.wc.push(slab);
+  // --- Tường rào + cổng
+  const SEG = [[[31.785, -80.895], [48.285, -81.535]], [[31.785, -80.895], [32.355, -85.13]], [[32.355, -85.13], [32.615, -87.11]],
+    [[33.36, -92.67], [43.38, -92.4]], [[40.69, -92.34], [55.55, -92.34]], [[55.53, -91.83], [56.915, -83.975]], [[51.325, -82.92], [56.915, -83.975]],
+    [[51.1, -82.1], [51.28, -82.97]], [[51.37, -84.34], [51.37, -82.95]], [[55.2, -92.34], [55.55, -91.8]]];
+  const inSeg = (x, z) => SEG.some(([a, b]) => { const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz, t = ((x - a[0]) * dx + (z - a[1]) * dz) / L2;
+    if (t < -.03 || t > 1.03) return false; const px = a[0] + t * dx - x, pz = a[1] + t * dz - z; return px * px + pz * pz < .19 * .19; });
+  const inGate = q => (q[0] > 32.2 && q[0] < 34.75 && q[2] > -92.1 && q[2] < -86.95)      // cổng bên trái: trụ, nan, cánh sắt, mái cổng
+    || (q[0] > 33.2 && q[0] < 33.7 && q[2] > -92.7 && q[2] < -91.2);                       // trụ góc cổng phía sau
+  const WALLS = V4.wall.names;
+  splitTris(root, 'rao', (P, o) => P.every(inGate) || (WALLS.includes(o.material.name) && o.material.color.getHex() !== CREAM && P.every(q => q[1] < 4.95 && inSeg(q[0], q[2]))), used);
+}
+function brightenBits(root) {
+  // gạch thẻ trên mép cửa phòng thờ (mặt hiên trái) sáng lên
+  root.traverse(o => { if (!o.isMesh || o.material.name !== 'Brick Tumbled') return;
+    o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+    if (b.max.x < 41.6 && b.min.y > 3) o.visible = false; });
+  scene.add(cladBox(41.465, 41.49, 3.55, 4.21, -92.34, -88.56));        // cùng loại gạch thẻ với chân nhà lối vào sân bên phải
+  // mặt tiền (các mặt tường quay về phía cổng, bên trái nhà) sáng lên cho đồng màu mặt hông đang có nắng
+  const front = new Map();
+  splitTris(root, 'mattien', (P, o) => {
+    if (o.material.color.getHex() !== CREAM) return false;
+    if (!P.every(q => Math.abs(q[0] - P[0][0]) < .003) || P[0][0] > 47) return false;   // mặt đứng song song trục z, nửa trước nhà
+    return true;
+  }, new Set(Object.values(LAYER).flat()));
+  for (const m of LAYER.mattien) { if (!front.has(m.material)) { const c = m.material.clone(); c.emissive.set(0x3a342b); front.set(m.material, c); } m.material = front.get(m.material); }
+  LAYER.mattien.length = 0;
+}
+
 function setLayer(k, v) { LAYER[k].forEach(m => m.visible = v); LAYER_OFF[k].forEach(m => m.visible = !v); }
 // ---------- Bảng ẩn / hiện lớp (thêm lớp mới: thêm vào LAYERS và LAYER) ----------
-const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt'], ['maiton', 'Mái tôn']];
+const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt'], ['maiton', 'Mái tôn'], ['rao', 'Tường rào, cổng'], ['wc', 'Nhà vệ sinh (WC)']];
 function initLayers() {
   const box = document.getElementById('layers'), list = document.getElementById('lyList'), btn = document.getElementById('bLayer');
   const hide0 = (params.get('hide') || '').split(',');
@@ -594,6 +653,8 @@ loader.load(params.get('model') || 'model.glb', g => {
   boxLayer(root, 'maygiat', [55.7, .85, -84.84], [55.77, 1.2, -84.44], []);  // viền cửa máy giặt (dùng chung vật liệu tường)
   window.__skin = fixFlicker(root);
   addTinRoof();
+  layersFenceWC(root);
+  brightenBits(root);
   initLayers();
   const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
   box.getCenter(C); C.y = box.min.y; R = Math.max(size.x, size.z) * .75;
