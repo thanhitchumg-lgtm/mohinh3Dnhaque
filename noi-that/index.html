@@ -402,12 +402,21 @@ floorRect(335, 413, 1685, 843, wF(335, 413, 1685, 843));          // khách - b�
 floorRect(310, 505, 335, 771, wF(310, 505, 335, 771), .0015);     // ngưỡng cửa sảnh
 floorRect(812, 843, 938, 867, wF(812, 843, 938, 867), .0015);     // ngưỡng cửa chính
 floorRect(225, 405, 600, 413, wF(225, 405, 600, 413), .0015);
+{ // nền lót cùng gạch nằm thấp hơn mặt sàn 5 mm: lấp khe nối giữa các tấm sàn ở cửa ra vào (hết đường đen)
+  const u = new THREE.Mesh(new THREE.PlaneGeometry(X(1690) - X(225), Z(866) - Z(10)), mTileAll);
+  u.rotation.x = -Math.PI / 2; u.position.set((X(225) + X(1690)) / 2, .015, (Z(10) + Z(866)) / 2);
+  const g = mTileAll.userData.grid, uv = u.geometry.attributes.uv, p = u.geometry.attributes.position, cx = u.position.x, cz = u.position.z;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (cx + p.getX(i) - g.x0) / g.s, (g.z0 - (cz - p.getY(i))) / g.s);
+  u.receiveShadow = true; scene.add(u);
+}
 const stoneC = stoneCanvas();
 const mStone = M({ map: tex(stoneC, (X(310) - X(138)) / 1.2, (Z(867) - Z(10)) / 1.2), roughness: .6 });
 mSlab.map = tex(stoneC, 1 / 1.2, 1 / 1.2); mSlab.color.set(0xffffff); mSlab.roughness = .6;
 const mBrownStone = M({ map: tex(stoneCanvas([68, 50, 34]), 1 / 1.2, 1 / 1.2), roughness: .5 });   // đá nâu dải giữa bậc       // bậc tam cấp cùng đá
-floorRect(138, 10, 225, 413, mStone, .003);
-floorRect(138, 413, 310, 867, mStone, .003);
+// sàn hiên đá xám chia quanh dải đá nâu (không nằm chồng lên nhau → mặt phẳng, hết gờ tối ở cửa)
+mStone.map.repeat.set(1, 1); mStone.userData.grid = { x0: X(138), z0: Z(10), s: 1.2 };
+floorRect(138, 10, 225, 122, mStone, .003); floorRect(138, 302, 225, 413, mStone, .003);
+floorRect(138, 413, 310, 562, mStone, .003); floorRect(138, 718, 310, 867, mStone, .003);
 // bậc tam cấp
 // 5 bậc từ sân lên hiên (mỗi bậc cao 15 cm, sâu 30 cm)
 // 5 bậc ốp đá: viền đá xám 2 bên, dải đá nâu ở giữa chạy từ bậc dưới lên hết sàn hiên tới cửa
@@ -417,8 +426,8 @@ for (const [a, b, s1, s2, door] of STAIRS) {
     const x1 = 138 - 30 * (5 - k), x2 = x1 + 30;                      // mỗi bậc chỉ chiếm đúng 30 cm của nó: các khối không chồng nhau → hết nháy 2 bên
     pr(x1, a, x2, s1, -.75, .15 * k, mSlab); pr(x1, s1, x2, s2, -.75, .15 * k, mBrownStone); pr(x1, s2, x2, b, -.75, .15 * k, mSlab);
   }
-  pr(137.4, s1, 138, s2, -.15, .175, mBrownStone, false);              // cổ bậc trên cùng (mặt bệ nhà), cao tới mặt lớp phủ
-  floorRect(138, s1, door, s2, mBrownStone, .005);                      // dải nâu trên sàn hiên tới cửa
+  pr(137.4, s1, 138, s2, -.15, .17, mBrownStone, false);               // cổ bậc trên cùng (mặt bệ nhà), cao tới mặt lớp phủ
+  floorRect(138, s1, door, s2, mBrownStone, .003);                      // dải nâu trên sàn hiên tới cửa (cùng cốt mặt sàn)
 }
 function tree(px, py, s = 1, x, z) {
   const g = new THREE.Group(); g.position.set(x ?? X(px), 0, z ?? Z(py)); scene.add(g);
