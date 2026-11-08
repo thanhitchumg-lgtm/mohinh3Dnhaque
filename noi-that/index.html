@@ -2,6 +2,13 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#8a5a2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nhà 3D">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Mô hình 3D – Nội thất</title>
 <style>
@@ -62,7 +69,7 @@ const HC = 1.0;     // tường phía trước bị cắt
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 2.5 : 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 3 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -132,7 +139,7 @@ function floorTileCanvas() { // 2x2 viên gạch porcelain vân đá nhẹ, có 
     for (let k = 0; k < 3; k++) { g.strokeStyle = `rgba(160,140,120,${.08 + Math.random() * .08})`; g.lineWidth = 1 + Math.random() * 2; g.beginPath(); let x = x0 + Math.random() * S / 2, y = y0; g.moveTo(x, y); for (let t = 0; t < 12; t++) { x += (Math.random() - .3) * 50; y += 45; g.lineTo(x, y); } g.stroke(); }
     g.restore();
   }
-  g.fillStyle = '#b8aa98'; for (const p of [0, S / 2]) { g.fillRect(p, 0, 4, S); g.fillRect(0, p, S, 4); }
+  g.fillStyle = '#a3927c'; for (const p of [0, S / 2]) { g.fillRect(p - 3, 0, 6, S); g.fillRect(0, p - 3, S, 6); }   // mạch rõ hơn
   return c;
 }
 function bambooCanvas() {
@@ -203,10 +210,10 @@ function stoneCanvas(base = [158, 159, 161]) { // đá granite nguyên tấm, m�
     const gr = g.createRadialGradient(x, y, 10, x, y, r); const d = Math.random() < .5 ? '0,0,0' : '255,255,255';
     gr.addColorStop(0, `rgba(${d},.05)`); gr.addColorStop(1, `rgba(${d},0)`); g.fillStyle = gr; g.fillRect(0, 0, S, S);
   }
-  for (let k = 0; k < 26000; k++) { // hạt granite
-    const r = Math.random();
-    g.fillStyle = r < .45 ? `rgba(60,56,52,${Math.random() * .45})` : r < .85 ? `rgba(245,243,238,${Math.random() * .5})` : `rgba(20,18,16,${Math.random() * .4})`;
-    g.fillRect(Math.random() * S, Math.random() * S, 1 + Math.random() * 3, 1 + Math.random() * 3);
+  for (let k = 0; k < 2600; k++) { // hạt granite cỡ vừa (giữ được khi nhìn xa), độ tương phản thấp
+    const r = Math.random(), z = 2 + Math.random() * 3.5;
+    g.fillStyle = r < .5 ? `rgba(70,64,58,${.04 + Math.random() * .08})` : `rgba(240,236,228,${.04 + Math.random() * .08})`;
+    g.beginPath(); g.ellipse(Math.random() * S, Math.random() * S, z, z * (.6 + Math.random() * .4), Math.random() * 3, 0, Math.PI * 2); g.fill();
   }
   return c;
 }
@@ -261,6 +268,8 @@ const mLeaf = M({ color: 0x4d7a37, roughness: .8 });
 const mLeaf2 = M({ color: 0x5f8f3f, roughness: .8 });
 const mPot = M({ color: 0xe9e4dc, roughness: .6 });
 const mGroove = M({ color: 0x2b241e, roughness: 1 });
+const mGrooveSoft = M({ color: 0x9c8d7b, roughness: 1 });   // khe cánh tủ bếp: dịu
+const mHandleSoft = M({ color: 0x6f645b, roughness: .4, metalness: .2 });   // tay nắm tủ áo: dịu
 const mLED = M({ color: 0xffe2b0, emissive: 0xffc77a, emissiveIntensity: 2.2 });
 const mRug = M({ color: 0xb8a68e, roughness: 1 });
 const mRugRed = M({ map: tex(rugCanvas()), roughness: 1 });
@@ -504,7 +513,7 @@ function wardrobe(x1, y1, x2, y2, face) {
     const zc = z0 + dw * (i + .5), mat = i % 2 ? mWhiteGloss : mOakV;
     bx(.02, 2.24, dw - .012, mat, fx, .09 + 1.12, zc);
     bx(.02, .5, dw - .012, mat, fx, 2.36 + .25, zc);
-    bx(.02, .5, .018, mBlack, fx + face * .015, 1.15, zc + (i % 2 ? -1 : 1) * (dw / 2 - .06));
+    bx(.02, .5, .018, mHandleSoft, fx + face * .015, 1.15, zc + (i % 2 ? -1 : 1) * (dw / 2 - .06));
   }
 }
 function desk(x1, y1, x2, y2, chairRot, mirror = false) {
@@ -620,11 +629,11 @@ for (const x of [688, 704]) cyl(.03, .12, mWhiteGloss, X(x), .44, Z(440), scene,
 // ===== Bếp & ăn =====
 function kBase(x1, y1, x2, y2) { pr(x1, y1, x2, y2, 0, .08, mGroove); pr(x1, y1, x2, y2, .08, .78, mOak); pr(x1 - 2, y1 - 2, x2 + 2, y2 + 2, .86, .04, mQuartz); }
 kBase(1147, 522, 1320, 585); kBase(1257, 585, 1320, 762);
-for (let x = 1147 + 43; x < 1320; x += 43) bx(.008, .76, .01, mGroove, X(x), .47, Z(585) + .005);
-for (let y = 585 + 44; y < 762; y += 44) bx(.01, .76, .008, mGroove, X(1257) - .005, .47, Z(y));
-bx(X(1320) - X(1147), .008, .01, mGroove, (X(1147) + X(1320)) / 2, .66, Z(585) + .005);
+for (let x = 1147 + 43; x < 1320; x += 43) bx(.008, .76, .01, mGrooveSoft, X(x), .47, Z(585) + .005);
+for (let y = 585 + 44; y < 762; y += 44) bx(.01, .76, .008, mGrooveSoft, X(1257) - .005, .47, Z(y));
+bx(X(1320) - X(1147), .008, .01, mGrooveSoft, (X(1147) + X(1320)) / 2, .66, Z(585) + .005);
 pr(1288, 522, 1320, 762, 1.45, H - 1.45, mWhiteGloss);                               // tủ trên kịch trần (Acrylic)
-for (let y = 522 + 40; y < 762; y += 40) bx(.01, H - 1.45, .008, mGroove, X(1288) - .005, 1.45 + (H - 1.45) / 2, Z(y));
+for (let y = 522 + 40; y < 762; y += 40) bx(.01, H - 1.45, .008, mGrooveSoft, X(1288) - .005, 1.45 + (H - 1.45) / 2, Z(y));
 pr(1285, 524, 1288, 760, 1.42, .015, mLED, false);                                     // LED hắt dưới tủ
 pr(1167, 530, 1232, 580, .9, .008, mBlack);                                            // bếp từ
 for (const [a, b] of [[1182, 541], [1217, 541], [1182, 568], [1217, 568]]) {
@@ -699,12 +708,17 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight); lblR.setSize(innerWidth, innerHeight);
 });
-const composer = new EffectComposer(renderer);
+// ---------- Nét viền cạnh (kiểu SketchUp) cho tường, bậc, đồ gỗ: giúp góc cạnh rõ khi xem xa ----------
+{ const lineMat = new THREE.LineBasicMaterial({ color: 0x3d3229, transparent: true, opacity: .85 }); const list = [];
+  scene.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry' && !o.material.transparent && o.material !== mWall && o.material !== mCap && o.material !== mGrooveSoft && o.material !== mHandleSoft) list.push(o); /* tường không kẻ viền */ });
+  const lineSoft = new THREE.LineBasicMaterial({ color: 0x5a4c40, transparent: true, opacity: .35 }), SOFTSET = new Set([mOakV, mWhiteGloss, mOak, mQuartz]);   // tủ áo, tủ bếp: viền mờ
+  for (const o of list) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25), SOFTSET.has(o.material) ? lineSoft : lineMat); e.raycast = () => {}; o.add(e); } }
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio(), { type: THREE.HalfFloatType, samples: 4 }));   // có khử răng cưa (MSAA)
 composer.addPass(new RenderPass(scene, camera));
-if (!params.has('noao') && !MOBILE) { const ao = new GTAOPass(scene, camera, innerWidth, innerHeight); ao.updateGtaoMaterial({ radius: .6, distanceExponent: 1, thickness: 1, scale: 1.2 }); composer.addPass(ao); }
+if (params.has('ao') && !MOBILE)   /* AO tắt mặc định cho ảnh nét, bật bằng ?ao */ { const ao = new GTAOPass(scene, camera, innerWidth, innerHeight); ao.updateGtaoMaterial({ radius: .6, distanceExponent: 1, thickness: 1, scale: 1.2 }); composer.addPass(ao); }
 composer.addPass(new OutputPass());
 addEventListener('resize', () => composer.setSize(innerWidth, innerHeight));
-renderer.setAnimationLoop(() => { controls.update(); composer.render(); lblR.render(scene, camera); });
+renderer.setAnimationLoop(() => { controls.update(); if (MOBILE) renderer.render(scene, camera); else composer.render(); lblR.render(scene, camera); });
 window.__ready = true;
 </script>
 </body>
