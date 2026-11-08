@@ -294,6 +294,11 @@ function floorRect(x1, y1, x2, y2, mat, y = 0.002) {
   const w = X(x2) - X(x1), d = Z(y2) - Z(y1);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
   m.rotation.x = -Math.PI / 2; m.position.set((X(x1) + X(x2)) / 2, y, (Z(y1) + Z(y2)) / 2);
+  if (mat.userData.grid) { // UV theo toạ độ thực: mọi ô gạch dùng chung 1 lưới mạch (gốc = góc phòng khách)
+    const g = mat.userData.grid, uv = m.geometry.attributes.uv, p = m.geometry.attributes.position, cx = (X(x1) + X(x2)) / 2, cz = (Z(y1) + Z(y2)) / 2;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (cx + p.getX(i) - g.x0) / g.s, (g.z0 - (cz - p.getY(i))) / g.s);
+    uv.needsUpdate = true;
+  }
   m.receiveShadow = true; scene.add(m); return m;
 }
 // Tường: along = 'x' (chạy ngang) hoặc 'z' (chạy dọc); t1..t2 = bề dày; s1..s2 = chiều dài; ops = lỗ cửa
@@ -350,7 +355,9 @@ pr(18, 866, 1690, 867, -.75, .748, mBrick, false);   // mặt gạch phẳng v�
 const wDark = M({ map: tex(woodCanvas({ rows: 14, base: [168, 120, 80], vary: 7, grain: 70, size: 2048 }), (X(600) - X(225)) / 2.4, (Z(405) - Z(10)) / 2.4), roughness: .4 });
 const TILE = (Z(843) - Z(413)) / 4;               // 4 viên hết chiều rộng phòng khách (~1.07 m)
 const tileC = floorTileCanvas();
-const wF = (x1, y1, x2, y2) => M({ map: tex(tileC, (X(x2) - X(x1)) / (2 * TILE), (Z(y2) - Z(y1)) / (2 * TILE)), roughness: .25, color: 0xfffaf2 });
+const mTileAll = M({ map: tex(tileC, 1, 1), roughness: .25, color: 0xfffaf2 });
+mTileAll.userData.grid = { x0: X(335), z0: Z(413), s: 2 * TILE };   // lưới mạch chung theo phòng khách
+const wF = () => mTileAll;
 floorRect(225, 10, 600, 405, wDark);                               // phòng thờ: gỗ tối
 floorRect(600, 10, 1685, 413, wF(600, 10, 1685, 413));            // dãy phòng ngủ: gạch
 floorRect(335, 413, 1685, 843, wF(335, 413, 1685, 843));          // khách - bếp - PN4: gạch
@@ -466,10 +473,10 @@ wall('x', 520, 530, 1320, 1660, H, [{ a: 1350, b: 1435, t: 'door' }]);
 wall('z', 1320, 1330, 530, 843, H);
 
 // ---------- Nội thất ----------
-function bed(px, py, w, l, rot, duvet, noTab = 0) {
+function bed(px, py, w, l, rot, duvet, noTab = 0, tab = null) {   // tab = [xa, xb]: mép trái/phải của tab theo toạ độ thực (m)
   const g = new THREE.Group(); g.position.set(X(px), 0, Z(py)); g.rotation.y = rot; scene.add(g);
   bx(w + .08, .3, l + .06, mOak, 0, .15, 0, g);
-  bx(w + .3, 1.05, .08, mOak, 0, .525, -l / 2 - .04, g);
+  bx(w + .08, 1.05, .08, mOak, 0, .525, -l / 2 - .04, g);          // tấm đầu giường: rộng bằng giường
   bx(w - .1, .62, .06, mLinen, 0, .78, -l / 2 + .03, g);
   bx(w - .06, .22, l - .1, mWhite, 0, .39, .02, g);
   bx(w + .04, .1, l * .7, mBeige, 0, .54, l * .14, g);
@@ -477,15 +484,17 @@ function bed(px, py, w, l, rot, duvet, noTab = 0) {
   const pw = (w - .3) / 2;
   bx(pw, .16, .34, mBeige2, -pw / 2 - .07, .6, -l / 2 + .25, g); bx(pw, .16, .34, mBeige2, pw / 2 + .07, .6, -l / 2 + .25, g);
   bx(pw * .9, .13, .3, mBeige, -pw / 2 - .07, .66, -l / 2 + .52, g); bx(pw * .9, .13, .3, mBeige, pw / 2 + .07, .66, -l / 2 + .52, g);
+  const tz = -l / 2 + .12;                                           // tab áp sát tường đầu giường
   for (const s of [-1, 1]) { // tab đầu giường + đèn ngủ
     if (s === noTab) continue;
-    const x = s * (w / 2 + .3);
-    bx(.45, .48, .4, mWhiteGloss, x, .24, -l / 2 + .2, g); bx(.42, .14, .01, mOak, x, .36, -l / 2 + .405, g);
-    cyl(.06, .03, mOak, x, .495, -l / 2 + .2, g, 16);                                    // đế đèn
-    const gl = new THREE.Mesh(new THREE.SphereGeometry(.1, 20, 14), mGlass); gl.position.set(x, .6, -l / 2 + .2); g.add(gl);
-    const sh = cyl(.03, .08, mLED, x, .58, -l / 2 + .2, g, 12); sh.castShadow = false;   // bóng đèn trong chao kính
+    const x = tab ? Math.round(Math.cos(rot)) * ((tab[0] + tab[1]) / 2 - X(px)) : s * (w / 2 + .3), tw = tab ? tab[1] - tab[0] : .45;
+    bx(tw, .48, .4, mWhiteGloss, x, .24, tz, g); bx(tw - .03, .14, .01, mOak, x, .36, tz + .205, g);
+    cyl(.06, .03, mOak, x, .495, tz, g, 16);                                    // đế đèn
+    const gl = new THREE.Mesh(new THREE.SphereGeometry(.1, 20, 14), mGlass); gl.position.set(x, .6, tz); g.add(gl);
+    const sh = cyl(.03, .08, mLED, x, .58, tz, g, 12); sh.castShadow = false;   // bóng đèn trong chao kính
   }
 }
+
 function wardrobe(x1, y1, x2, y2, face) {
   pr(x1, y1, x2, y2, 0, H, mOakV);
   const x0 = X(x1), x3 = X(x2), z0 = Z(y1), z3 = Z(y2), L = z3 - z0;
@@ -557,16 +566,16 @@ pr(335, 135, 385, 175, 0, .3, mDarkWood); pr(337, 137, 383, 173, .3, .06, mSofaG
 pr(335, 262, 385, 302, 0, .3, mDarkWood); pr(337, 264, 383, 300, .3, .06, mSofaGrey);
 
 // ===== PN1 =====
-bed(745, 150, 1.6, 2.1, 0, mBeige);
+bed(745, 150, 1.6, 2.1, 0, mBeige, 1, [X(612) + .005, X(745) - .84 - .005]);          // PN1: tab kín từ tường tới giường
 wardrobe(900, 35, 963, 290, -1);
 // ===== PN2 =====
-bed(1174, 150, 1.6, 2.1, 0, mBeige);
+bed(1174, 150, 1.6, 2.1, 0, mBeige, -1, [X(1174) + .84 + .005, X(1310) - .005]);       // PN2: tab kín từ giường tới tường
 wardrobe(977, 35, 1040, 290, 1);
 // ===== PN3 =====
-bed(1440, 150, 1.6, 2.1, 0, mBeige, 1);
+bed(1414, 150, 1.6, 2.1, 0, mBeige, -1, [X(1414) + .84 + .005, X(1595) - .02]);   // PN3: giường sát tường PN2, tab kín từ giường tới tủ áo
 wardrobe(1595, 35, 1660, 290, -1);
 // ===== PN4 =====
-bed(1555, 735, 1.6, 2.0, Math.PI, mTerracotta);
+bed(1576, 735, 1.6, 2.0, Math.PI, mTerracotta, -1, [X(1393) + .02, X(1576) - .84 - .005]);   // PN4: giường sát tường trục 5, tab kín từ tủ áo tới giường
 wardrobe(1330, 640, 1393, 843, 1);
 
 // ===== Phòng khách =====
