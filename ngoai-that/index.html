@@ -239,7 +239,7 @@ function cladBox(x0, x1, y0, y1, z0, z1) {               // tấm ốp gạch th
 }
 
 // ===== Lớp phòng thờ 2 + thay mặt sân trống bằng gạch =====
-const LAYER = { tho2: [], tudong: [], xemay: [], maygiat: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [], maygiat: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
+const LAYER = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
 const ROOM = { x0: 31.75, x1: 36.85, z0: -85.95, z1: -80.9 }; // vùng phòng thờ 2 (m)
 // tường rào bên trái (đoạn chung với phòng thờ 2): mặt ngoài A→B, mặt trong C→D
 const FA = [31.723, -80.835], FB = [32.296, -85.127], FC = [31.849, -80.948];
@@ -527,9 +527,34 @@ function fixFlicker(root) {
   return nBrown;
 }
 
+// ===== Mái tôn xanh: dải trước nhà (hiên phải) + dải hông phải; mép tường nhà cao 4.0 m, mép rào bằng đỉnh tường rào =====
+function tinTex() {                                                         // tôn sóng vuông màu xanh lá, mỗi sóng 25 cm
+  const W = 256, c = document.createElement('canvas'); c.width = W; c.height = 8; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, W, 0);
+  gr.addColorStop(0, '#2c6b2f'); gr.addColorStop(.08, '#3f8a42'); gr.addColorStop(.16, '#2c6b2f'); gr.addColorStop(.2, '#1d4d20'); gr.addColorStop(.26, '#2f7232'); gr.addColorStop(1, '#2f7232');
+  g.fillStyle = gr; g.fillRect(0, 0, W, 8);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; return t;
+}
+function addTinRoof() {
+  const HY = 4.0, FY = 3.745, RIB = .25;
+  const END = -88.89, fx = 55.48 + (END + 91.9) / 7.88 * 1.37;             // dải hông dừng ở mép cửa sổ phòng ngủ 3
+  const H = [[42.3, -84.34], [55.14, -84.34], [55.14, END]];               // mép gắn tường nhà
+  const F = [[fx, END], [56.85, -84.02], [51.28, -82.97], [51.1, -82.1], [48.28, -81.59], [42.3, -81.36]];  // mép trên tường rào
+  const P = [...H.map(p => [...p, HY]), ...F.map(p => [...p, FY])];
+  const tri = THREE.ShapeUtils.triangulateShape(P.map(([x, z]) => new THREE.Vector2(x, z)), []);
+  const pos = [], uv = [];
+  for (const t of tri) {
+    const cx = t.reduce((s, i) => s + P[i][0], 0) / 3, side = cx > 55.14;     // dải hông: sóng chạy theo x, dải trước: sóng chạy theo z
+    for (const i of t) { const [x, z, y] = P[i]; pos.push(x, y, z); uv.push(side ? z / RIB : x / RIB, 0); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tinTex(), roughness: .45, metalness: .25, side: THREE.DoubleSide }));
+  m.castShadow = m.receiveShadow = true; scene.add(m); LAYER.maiton.push(m);
+}
+
 function setLayer(k, v) { LAYER[k].forEach(m => m.visible = v); LAYER_OFF[k].forEach(m => m.visible = !v); }
 // ---------- Bảng ẩn / hiện lớp (thêm lớp mới: thêm vào LAYERS và LAYER) ----------
-const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt']];
+const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt'], ['maiton', 'Mái tôn']];
 function initLayers() {
   const box = document.getElementById('layers'), list = document.getElementById('lyList'), btn = document.getElementById('bLayer');
   const hide0 = (params.get('hide') || '').split(',');
@@ -568,6 +593,7 @@ loader.load(params.get('model') || 'model.glb', g => {
     ['default_face_material', 'default_face_material85', 'Concrete Aggregate Smoke', 'Brick Tumbled', 'Rough Square Concrete Block']);
   boxLayer(root, 'maygiat', [55.7, .85, -84.84], [55.77, 1.2, -84.44], []);  // viền cửa máy giặt (dùng chung vật liệu tường)
   window.__skin = fixFlicker(root);
+  addTinRoof();
   initLayers();
   const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
   box.getCenter(C); C.y = box.min.y; R = Math.max(size.x, size.z) * .75;
