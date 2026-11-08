@@ -31,6 +31,23 @@ canvas{touch-action:none}
  #ui button{padding:7px 9px;font-size:12px;margin:4px 3px 0 0}
  .lbl{font-size:9px;padding:2px 6px}.lbl b{font-size:11px}
 }
+#layers{display:none;position:fixed;top:12px;right:12px;width:236px;background:rgba(255,255,255,.96);border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.18);z-index:20;font-size:13px;color:#333;overflow:hidden}
+#layers.open{display:block}
+#layers .hd{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#8a5a2b;color:#fff;font-weight:600}
+#layers .hd button{background:none;border:none;color:#fff;font-size:20px;line-height:1;cursor:pointer;padding:0 2px}
+#layers .list{padding:6px;max-height:60vh;overflow:auto}
+#layers label{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;user-select:none}
+#layers label:hover{background:#f6efe4}
+#layers input{width:18px;height:18px;accent-color:#8a5a2b;margin:0}
+#layers .ft{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid #eee}
+#layers .ft button{flex:1;padding:7px 0;border:1px solid #b9a07c;background:#fff;border-radius:6px;cursor:pointer;font-size:12px}
+#bLayer.on{background:#8a5a2b!important;color:#fff;border-color:#8a5a2b!important}
+@media (max-width:800px),(pointer:coarse){
+ #layers{top:10px;left:8px;right:8px;width:auto}
+ #layers .list{display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:42vh}
+ #layers label{background:#f7f3ee;padding:10px 8px;font-size:12.5px;gap:8px}
+ #layers .ft button{padding:9px 0;font-size:13px}
+}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
@@ -42,8 +59,9 @@ canvas{touch-action:none}
   <button id="tg">Ẩn thanh</button><h1><a id="back" href="../">← Trang chọn</a>Mô hình 3D – Nội thất</h1>
   <div class="body"><span id="hint">Chuột trái: xoay · Chuột phải: kéo · Cuộn: phóng to</span><br>
   <button id="bIso">Góc ISO</button><button id="bIso2">Góc ISO 2</button><button id="bTop">Từ trên xuống</button><br>
-  <button id="bLbl">Ẩn/hiện nhãn</button><button id="bPng">Lưu ảnh PNG</button></div>
+  <button id="bLayer">☰ Lớp</button><button id="bLbl">Ẩn/hiện nhãn</button><button id="bPng">Lưu ảnh PNG</button></div>
 </div>
+<div id="layers"><div class="hd">Ẩn / hiện lớp<button id="lyClose" aria-label="Đóng">×</button></div><div class="list" id="lyList"></div><div class="ft"><button id="lyAll">Hiện tất cả</button><button id="lyNone">Ẩn tất cả</button></div></div>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -82,6 +100,12 @@ lblR.domElement.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none
 document.body.appendChild(lblR.domElement);
 
 const scene = new THREE.Scene();
+// ---- Lớp: mọi vật thêm vào scene được gắn tên lớp đang mở (CUR) ----
+let CUR = null;
+{ const _add = scene.add.bind(scene); scene.add = (...o) => { for (const x of o) if (CUR && !x.userData.layer) x.userData.layer = CUR; return _add(...o); }; }
+const inLayer = (fn, name) => function (...a) { const p = CUR; CUR = name; try { return fn.apply(this, a); } finally { CUR = p; } };
+// các hàm dựng đồ (khai báo function nên dùng được từ đây) tự gắn lớp
+plant = inLayer(plant, 'cay'); plantSoil = inLayer(plantSoil, 'cay'); bed = inLayer(bed, 'giuong'); wardrobe = inLayer(wardrobe, 'tuao'); chair = inLayer(chair, 'an');
 scene.background = new THREE.Color(0xb9c6cf);   // nền trời xám xanh, tách khỏi tường kem
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -458,6 +482,8 @@ plant(362, 812, 1.0, .35);          // cây nhỏ đầu sofa
 plant(722, 782, 1.35, .42);          // cây lớn cuối sofa
 
 
+plant = inLayer(plant, 'cay'); plantSoil = inLayer(plantSoil, 'cay');
+CUR = 'tuong';
 // ---------- Tường ----------
 wall('x', 10, 35, 225, 1685, H);                                                             // tường hậu
 wall('z', 1660, 1685, 10, 867, H, [{ a: 270, b: 390, t: 'win' }, { a: 430, b: 512, t: 'door' }, { a: 545, b: 640, t: 'win' }]);
@@ -481,6 +507,7 @@ wall('z', 1310, 1330, 10, 398, H);
 wall('x', 520, 530, 1320, 1660, H, [{ a: 1350, b: 1435, t: 'door' }]);
 wall('z', 1320, 1330, 530, 843, H);
 
+CUR = null;
 // ---------- Nội thất ----------
 function bed(px, py, w, l, rot, duvet, noTab = 0, tab = null) {   // tab = [xa, xb]: mép trái/phải của tab theo toạ độ thực (m)
   const g = new THREE.Group(); g.position.set(X(px), 0, Z(py)); g.rotation.y = rot; scene.add(g);
@@ -554,6 +581,8 @@ function chair(px, py, rot, seatMat = mGreyFab) {
   bx(.42, .4, .06, seatMat, 0, .76, .2, g);
 }
 
+bed = inLayer(bed, 'giuong'); wardrobe = inLayer(wardrobe, 'tuao'); chair = inLayer(chair, 'an');
+CUR = 'tho';
 // ===== Phòng thờ (theo ảnh mẫu: bàn thờ gỗ tối dọc tường, thảm be, bàn trà thấp) =====
 floorRect(272, 120, 445, 335, M({ map: tex(keyRugCanvas()), roughness: 1 }), .006);
 // bàn thờ: mặt + chân + giá dưới
@@ -574,6 +603,7 @@ for (const [a, b] of [[332, 189], [388, 189], [332, 246], [388, 246]]) pr(a - 2.
 pr(335, 135, 385, 175, 0, .3, mDarkWood); pr(337, 137, 383, 173, .3, .06, mSofaGrey);
 pr(335, 262, 385, 302, 0, .3, mDarkWood); pr(337, 264, 383, 300, .3, .06, mSofaGrey);
 
+CUR = null;
 // ===== PN1 =====
 bed(745, 150, 1.6, 2.1, 0, mBeige, 1, [X(612) + .005, X(745) - .84 - .005]);          // PN1: tab kín từ tường tới giường
 wardrobe(900, 35, 963, 290, -1);
@@ -587,6 +617,7 @@ wardrobe(1595, 35, 1660, 290, -1);
 bed(1576, 735, 1.6, 2.0, Math.PI, mTerracotta, -1, [X(1393) + .02, X(1576) - .84 - .005]);   // PN4: giường sát tường trục 5, tab kín từ tủ áo tới giường
 wardrobe(1330, 640, 1393, 843, 1);
 
+CUR = 'khach';
 // ===== Phòng khách =====
 // sofa nỉ xám: văng 3 chỗ + đoạn chaise bên trái (như ảnh mẫu)
 function sofaFab(x1, y1, x2, y2, back) { // khối sofa chữ nhật, lưng ở phía 'back' ('s' = phía dưới / 'w' = trái)
@@ -626,15 +657,18 @@ for (let x = 465 + 62.5; x < 714; x += 62.5) pr(x - .5, 460, x + .5, 462, .1, .2
 pr(500, 417, 680, 420, 1.0, .9, mBlack);                                             // TV
 for (const x of [688, 704]) cyl(.03, .12, mWhiteGloss, X(x), .44, Z(440), scene, 12);
 
+CUR = 'bepduoi';
 // ===== Bếp & ăn =====
 function kBase(x1, y1, x2, y2) { pr(x1, y1, x2, y2, 0, .08, mGroove); pr(x1, y1, x2, y2, .08, .78, mOak); pr(x1 - 2, y1 - 2, x2 + 2, y2 + 2, .86, .04, mQuartz); }
 kBase(1147, 522, 1320, 585); kBase(1257, 585, 1320, 762);
 for (let x = 1147 + 43; x < 1320; x += 43) bx(.008, .76, .01, mGrooveSoft, X(x), .47, Z(585) + .005);
 for (let y = 585 + 44; y < 762; y += 44) bx(.01, .76, .008, mGrooveSoft, X(1257) - .005, .47, Z(y));
 bx(X(1320) - X(1147), .008, .01, mGrooveSoft, (X(1147) + X(1320)) / 2, .66, Z(585) + .005);
+CUR = 'beptren';
 pr(1288, 522, 1320, 762, 1.45, H - 1.45, mWhiteGloss);                               // tủ trên kịch trần (Acrylic)
 for (let y = 522 + 40; y < 762; y += 40) bx(.01, H - 1.45, .008, mGrooveSoft, X(1288) - .005, 1.45 + (H - 1.45) / 2, Z(y));
 pr(1285, 524, 1288, 760, 1.42, .015, mLED, false);                                     // LED hắt dưới tủ
+CUR = 'bepduoi';
 pr(1167, 530, 1232, 580, .9, .008, mBlack);                                            // bếp từ
 for (const [a, b] of [[1182, 541], [1217, 541], [1182, 568], [1217, 568]]) {
   const r = new THREE.Mesh(new THREE.TorusGeometry(.075, .006, 6, 32), mSteelD); r.rotation.x = Math.PI / 2; r.position.set(X(a), .91, Z(b)); scene.add(r);
@@ -645,6 +679,7 @@ pr(1242, 766, 1318, 842, 0, 1.9, mSteel); bx(.006, 1.85, .01, mSteelD, X(1242) -
 pr(1242, 766, 1318, 842, 1.94, H - 1.94, mWhiteGloss);
 // (đã bỏ tủ phụ cạnh cửa sổ bếp)
 
+CUR = 'an';
 // bàn ăn 6 ghế
 pr(925, 622, 1097, 708, .72, .04, mOak);
 for (const [a, b] of [[935, 630], [1087, 630], [935, 700], [1087, 700]]) pr(a - 3, b - 3, a + 3, b + 3, 0, .72, mWalnut);
@@ -656,6 +691,7 @@ for (const x of []) {   // bỏ đèn thả (ảnh mẫu không có)
 }
 plantSoil(1011, 665, .76, .45); cyl(.07, .1, mWhiteGloss, X(1011), .81, Z(665), scene, 16);
 
+CUR = null;
 // ---------- Ánh sáng ----------
 scene.add(new THREE.HemisphereLight(0xffeedd, 0xa8865e, 0.75));
 const C = new THREE.Vector3(X(930), 0, Z(440));
@@ -708,6 +744,24 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight); lblR.setSize(innerWidth, innerHeight);
 });
+// ---------- Bảng ẩn / hiện lớp ----------
+{ const LAYERS = [['tuong', 'Tường'], ['tuao', 'Tủ áo'], ['beptren', 'Tủ bếp trên'], ['bepduoi', 'Tủ bếp dưới, tủ lạnh'], ['giuong', 'Giường, tab'],
+    ['khach', 'Sofa, kệ tivi, bàn trà'], ['an', 'Bàn ăn, ghế'], ['tho', 'Phòng thờ'], ['cay', 'Cây cảnh']];
+  const box = document.getElementById('layers'), list = document.getElementById('lyList'), btn = document.getElementById('bLayer');
+  const hide0 = (params.get('hide') || '').split(',');
+  const set = (k, v) => scene.children.forEach(o => { if (o.userData.layer === k) o.visible = v; });
+  for (const [k, t] of LAYERS) {
+    const l = document.createElement('label');
+    l.innerHTML = `<input type="checkbox" data-k="${k}" ${hide0.includes(k) ? '' : 'checked'}><span>${t}</span>`;
+    l.querySelector('input').onchange = e => set(k, e.target.checked); list.appendChild(l); if (hide0.includes(k)) set(k, false);
+  }
+  const all = v => list.querySelectorAll('input').forEach(i => { i.checked = v; set(i.dataset.k, v); });
+  document.getElementById('lyAll').onclick = () => all(true); document.getElementById('lyNone').onclick = () => all(false);
+  const tog = o => { box.classList.toggle('open', o); btn.classList.toggle('on', o); };
+  btn.onclick = () => tog(!box.classList.contains('open')); document.getElementById('lyClose').onclick = () => tog(false);
+  if (params.has('layers')) tog(true);
+  window.__layerCount = () => { const c = {}; scene.children.forEach(o => { const k = o.userData.layer; if (k) c[k] = (c[k] || 0) + 1; }); return c; };
+}
 // ---------- Nét viền cạnh (kiểu SketchUp) cho tường, bậc, đồ gỗ: giúp góc cạnh rõ khi xem xa ----------
 { const lineMat = new THREE.LineBasicMaterial({ color: 0x3d3229, transparent: true, opacity: .85 }); const list = [];
   scene.traverse(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry' && !o.material.transparent && o.material !== mWall && o.material !== mCap && o.material !== mGrooveSoft && o.material !== mHandleSoft) list.push(o); /* tường không kẻ viền */ });
