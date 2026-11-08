@@ -324,12 +324,12 @@ function cyl(r, h, mat, x, y, z, parent = scene, seg = 24, rTop = r) {
   m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }
 const NOTOP = new THREE.MeshBasicMaterial({ visible: false });
-function floorRect(x1, y1, x2, y2, mat, y = 0.002) {
-  // Lớp phủ dày 2 cm (chống nháy): mặt sàn nâng lên cốt 2 cm, thảm/dải nâu nằm trên cao hơn vài mm
-  y = y < .0045 ? .02 : y < .0055 ? .025 : .03;
+function floorRect(x1, y1, x2, y2, mat, y = 0.002, T = .02) {
+  // Lớp phủ chống nháy: mặt sàn nâng lên cốt 2 cm; dải nâu/thảm nằm trên; T = bề dày lớp (thảm phòng khách 4 cm)
+  y = y < .0045 ? .02 : y < .0055 ? .025 : .02 + T;
   const w = X(x2) - X(x1), d = Z(y2) - Z(y1);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(w) - .006, .02, Math.abs(d) - .006), [mat, mat, NOTOP, mat, mat, mat]);  // thân lớp phủ (bỏ mặt trên)
-  body.position.set((X(x1) + X(x2)) / 2, y - .01, (Z(y1) + Z(y2)) / 2); body.receiveShadow = true; scene.add(body);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(w) - .006, T, Math.abs(d) - .006), [mat, mat, NOTOP, mat, mat, mat]);  // thân lớp phủ (bỏ mặt trên)
+  body.position.set((X(x1) + X(x2)) / 2, y - T / 2, (Z(y1) + Z(y2)) / 2); body.receiveShadow = true; scene.add(body);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
   m.rotation.x = -Math.PI / 2; m.position.set((X(x1) + X(x2)) / 2, y, (Z(y1) + Z(y2)) / 2);
   if (mat.userData.grid) { // UV theo toạ độ thực: mọi ô gạch dùng chung 1 lưới mạch (gốc = góc phòng khách)
@@ -414,8 +414,8 @@ floorRect(138, 413, 310, 867, mStone, .003);
 const STAIRS = [[85, 340, 122, 302, 225], [495, 787, 562, 718, 310]];   // [đầu, cuối, dải nâu từ, đến, tường cửa]
 for (const [a, b, s1, s2, door] of STAIRS) {
   for (let k = 1; k <= 4; k++) {
-    const x1 = 138 - 30 * (5 - k);
-    pr(x1, a, 138, s1, -.75, .15 * k, mSlab); pr(x1, s1, 138, s2, -.75, .15 * k, mBrownStone); pr(x1, s2, 138, b, -.75, .15 * k, mSlab);
+    const x1 = 138 - 30 * (5 - k), x2 = x1 + 30;                      // mỗi bậc chỉ chiếm đúng 30 cm của nó: các khối không chồng nhau → hết nháy 2 bên
+    pr(x1, a, x2, s1, -.75, .15 * k, mSlab); pr(x1, s1, x2, s2, -.75, .15 * k, mBrownStone); pr(x1, s2, x2, b, -.75, .15 * k, mSlab);
   }
   pr(137.4, s1, 138, s2, -.15, .175, mBrownStone, false);              // cổ bậc trên cùng (mặt bệ nhà), cao tới mặt lớp phủ
   floorRect(138, s1, door, s2, mBrownStone, .005);                      // dải nâu trên sàn hiên tới cửa
@@ -650,7 +650,7 @@ bx(.4, .34, .12, mSofaGrey2, X(655), .66, Z(795)).rotation.set(-.3, -.5, -.2);
   for (const y of [y1, y2 - 7]) pr(x1, y, x2, y + 7, .42, .2, mOak);                             // tay gỗ
 })();
 // thảm phòng khách viền hoa văn dưới bàn trà
-floorRect(485, 617, 683, 752, M({ map: tex(keyRugCanvas(), 1, 1, Math.PI / 2), roughness: 1, color: 0xc2a888 }), .006);
+floorRect(485, 617, 683, 752, M({ map: tex(keyRugCanvas(), 1, 1, Math.PI / 2), roughness: 1, color: 0xc2a888 }), .006, .04);   // thảm phòng khách dày 4 cm
 // bàn trà gỗ sồi
 pr(517, 652, 614, 706, .4, .05, mOak);
 for (const [a, b] of [[522, 657], [609, 657], [522, 701], [609, 701]]) pr(a - 3, b - 3, a + 3, b + 3, 0, .4, mOak);
@@ -664,8 +664,8 @@ for (const x of [688, 704]) cyl(.03, .12, mWhiteGloss, X(x), .44, Z(440), scene,
 
 CUR = 'bepduoi';
 // ===== Bếp & ăn =====
-function kBase(x1, y1, x2, y2) { pr(x1, y1, x2, y2, 0, .08, mGroove); pr(x1, y1, x2, y2, .08, .78, mOak); pr(x1 - 2, y1 - 2, x2 + 2, y2 + 2, .86, .04, mQuartz); }
-kBase(1147, 522, 1320, 585); kBase(1257, 585, 1320, 762);
+function kBase(x1, y1, x2, y2, qy1 = y1 - 2) { pr(x1, y1, x2, y2, 0, .08, mGroove); pr(x1, y1, x2, y2, .08, .78, mOak); pr(x1 - 2, qy1, x2 + 2, y2 + 2, .86, .04, mQuartz); }
+kBase(1147, 522, 1320, 585); kBase(1257, 585, 1320, 762, 587);   // mặt đá đoạn 2 bắt đầu đúng mép đoạn 1: không chồng nhau ở góc (hết nháy)
 for (let x = 1147 + 43; x < 1320; x += 43) bx(.008, .76, .01, mGrooveSoft, X(x), .47, Z(585) + .005);
 for (let y = 585 + 44; y < 762; y += 44) bx(.01, .76, .008, mGrooveSoft, X(1257) - .005, .47, Z(y));
 bx(X(1320) - X(1147), .008, .01, mGrooveSoft, (X(1147) + X(1320)) / 2, .66, Z(585) + .005);
@@ -674,11 +674,11 @@ pr(1288, 522, 1320, 762, 1.45, H - 1.45, mWhiteGloss);                          
 for (let y = 522 + 40; y < 762; y += 40) bx(.01, H - 1.45, .008, mGrooveSoft, X(1288) - .005, 1.45 + (H - 1.45) / 2, Z(y));
 pr(1285, 524, 1288, 760, 1.42, .015, mLED, false);                                     // LED hắt dưới tủ
 CUR = 'bepduoi';
-pr(1167, 530, 1232, 580, .901, .02, mBlack);                                           // bếp từ: mặt kính dày 2 cm
+pr(1167, 530, 1232, 580, .901, .04, mBlack);                                           // bếp từ: mặt kính dày 4 cm
 for (const [a, b] of [[1182, 541], [1217, 541], [1182, 568], [1217, 568]]) {
-  const r = new THREE.Mesh(new THREE.TorusGeometry(.075, .006, 6, 32), mSteelD); r.rotation.x = Math.PI / 2; r.position.set(X(a), .922, Z(b)); scene.add(r);
+  const r = new THREE.Mesh(new THREE.TorusGeometry(.075, .006, 6, 32), mSteelD); r.rotation.x = Math.PI / 2; r.position.set(X(a), .942, Z(b)); scene.add(r);
 }
-pr(1263, 645, 1306, 730, .9, .01, mSteel); pr(1268, 652, 1301, 723, .905, .01, mSteelD);   // chậu rửa
+pr(1263, 645, 1306, 730, .901, .04, mSteel); pr(1268, 652, 1301, 723, .941, .006, mSteelD);   // chậu rửa: mặt inox dày 4 cm, lòng chậu tối nằm trên
 cyl(.015, .32, mSteel, X(1312), 1.06, Z(688), scene, 10); bx(.18, .02, .02, mSteel, X(1303), 1.21, Z(688));
 pr(1242, 766, 1318, 842, 0, 1.9, mSteel); bx(.006, 1.85, .01, mSteelD, X(1242) - .004, .95, Z(804));  // tủ lạnh
 pr(1242, 766, 1318, 842, 1.94, H - 1.94, mWhiteGloss);
