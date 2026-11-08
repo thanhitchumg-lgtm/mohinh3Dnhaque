@@ -62,7 +62,7 @@ const HC = 1.0;     // tường phía trước bị cắt
 
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 2.5 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -75,7 +75,7 @@ lblR.domElement.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none
 document.body.appendChild(lblR.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xfdf6ef);
+scene.background = new THREE.Color(0xb9c6cf);   // nền trời xám xanh, tách khỏi tường kem
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 scene.environmentIntensity = 0.3;
@@ -118,7 +118,7 @@ function woodCanvas({ rows = 6, base = [200, 160, 118], vary = 14, joints = true
 }
 function tex(c, rx = 1, ry = 1, rot = 0) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = 8;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); t.anisotropy = renderer.capabilities.getMaxAnisotropy();
   if (rot) { t.center.set(.5, .5); t.rotation = rot; }
   return t;
 }
@@ -265,7 +265,7 @@ const mLED = M({ color: 0xffe2b0, emissive: 0xffc77a, emissiveIntensity: 2.2 });
 const mRug = M({ color: 0xb8a68e, roughness: 1 });
 const mRugRed = M({ map: tex(rugCanvas()), roughness: 1 });
 const mFruit = M({ color: 0xe0782a, roughness: .6 });
-const mGrass = M({ color: 0xffffff, roughness: 1 });
+const mGrass = M({ color: 0x8e9f7c, roughness: 1 });   // mặt đất quanh nhà: xanh cỏ dịu
 const mSlab = M({ color: 0xbfb6aa, roughness: .9 });
 const mTile = M({ map: tex(tileCanvas(), 1, 1), roughness: .7 });
 
@@ -652,7 +652,7 @@ scene.add(new THREE.HemisphereLight(0xffeedd, 0xa8865e, 0.75));
 const C = new THREE.Vector3(X(930), 0, Z(440));
 const sun = new THREE.DirectionalLight(0xffdcae, 3.6);
 sun.position.set(C.x - 12, 13, C.z + 3); sun.target.position.copy(C); scene.add(sun.target); scene.add(sun);
-sun.castShadow = true; sun.shadow.mapSize.set(MOBILE ? 2048 : 4096, MOBILE ? 2048 : 4096);
+sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.radius = MOBILE ? 2 : sun.shadow.radius;
 Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 50 });
 sun.shadow.bias = -.0003; sun.shadow.normalBias = .03; sun.shadow.radius = 4;
 // đèn LED âm trần (ấm)
