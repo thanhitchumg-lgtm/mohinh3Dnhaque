@@ -323,8 +323,13 @@ function cyl(r, h, mat, x, y, z, parent = scene, seg = 24, rTop = r) {
   const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, r, h, seg), mat);
   m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
 }
+const NOTOP = new THREE.MeshBasicMaterial({ visible: false });
 function floorRect(x1, y1, x2, y2, mat, y = 0.002) {
+  // Lớp phủ dày 2 cm (chống nháy): mặt sàn nâng lên cốt 2 cm, thảm/dải nâu nằm trên cao hơn vài mm
+  y = y < .0045 ? .02 : y < .0055 ? .025 : .03;
   const w = X(x2) - X(x1), d = Z(y2) - Z(y1);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(w) - .006, .02, Math.abs(d) - .006), [mat, mat, NOTOP, mat, mat, mat]);  // thân lớp phủ (bỏ mặt trên)
+  body.position.set((X(x1) + X(x2)) / 2, y - .01, (Z(y1) + Z(y2)) / 2); body.receiveShadow = true; scene.add(body);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
   m.rotation.x = -Math.PI / 2; m.position.set((X(x1) + X(x2)) / 2, y, (Z(y1) + Z(y2)) / 2);
   if (mat.userData.grid) { // UV theo toạ độ thực: mọi ô gạch dùng chung 1 lưới mạch (gốc = góc phòng khách)
@@ -412,7 +417,7 @@ for (const [a, b, s1, s2, door] of STAIRS) {
     const x1 = 138 - 30 * (5 - k);
     pr(x1, a, 138, s1, -.75, .15 * k, mSlab); pr(x1, s1, 138, s2, -.75, .15 * k, mBrownStone); pr(x1, s2, 138, b, -.75, .15 * k, mSlab);
   }
-  pr(137.4, s1, 138, s2, -.15, .148, mBrownStone, false);              // cổ bậc trên cùng (mặt bệ nhà)
+  pr(137.4, s1, 138, s2, -.15, .175, mBrownStone, false);              // cổ bậc trên cùng (mặt bệ nhà), cao tới mặt lớp phủ
   floorRect(138, s1, door, s2, mBrownStone, .005);                      // dải nâu trên sàn hiên tới cửa
 }
 function tree(px, py, s = 1, x, z) {
@@ -448,7 +453,7 @@ function plant(px, py, s = 1, potH = .35) {
 const mMarbleD = M({ color: 0x6b6862, roughness: .35 });
 const mInset = M({ color: 0x8c918d, roughness: .3 });
 for (const [a, b] of [[420, 495], [787, 866]]) {                         // bệ phải: mép ngoài trùng mép sảnh và mép nhà
-  pr(18, a, 138, b, -.75, .75, mSlab);                                 // bệ đá: mặt bằng cốt sảnh
+  pr(18, a, 138, b, -.75, .77, mSlab);                                 // bệ đá: mặt bằng cốt sảnh (đã tính lớp phủ 2 cm)
   const cy = a + 37.5;                                                 // tâm cột giữ như cũ
   pr(83, cy - 30, 141, cy + 30, 0, .42, mMarbleD);                     // chân cột đá tối
   pr(80, cy - 33, 144, cy + 33, .42, .05, mMarbleD);                   // gờ chân cột
@@ -669,9 +674,9 @@ pr(1288, 522, 1320, 762, 1.45, H - 1.45, mWhiteGloss);                          
 for (let y = 522 + 40; y < 762; y += 40) bx(.01, H - 1.45, .008, mGrooveSoft, X(1288) - .005, 1.45 + (H - 1.45) / 2, Z(y));
 pr(1285, 524, 1288, 760, 1.42, .015, mLED, false);                                     // LED hắt dưới tủ
 CUR = 'bepduoi';
-pr(1167, 530, 1232, 580, .9, .008, mBlack);                                            // bếp từ
+pr(1167, 530, 1232, 580, .901, .02, mBlack);                                           // bếp từ: mặt kính dày 2 cm
 for (const [a, b] of [[1182, 541], [1217, 541], [1182, 568], [1217, 568]]) {
-  const r = new THREE.Mesh(new THREE.TorusGeometry(.075, .006, 6, 32), mSteelD); r.rotation.x = Math.PI / 2; r.position.set(X(a), .91, Z(b)); scene.add(r);
+  const r = new THREE.Mesh(new THREE.TorusGeometry(.075, .006, 6, 32), mSteelD); r.rotation.x = Math.PI / 2; r.position.set(X(a), .922, Z(b)); scene.add(r);
 }
 pr(1263, 645, 1306, 730, .9, .01, mSteel); pr(1268, 652, 1301, 723, .905, .01, mSteelD);   // chậu rửa
 cyl(.015, .32, mSteel, X(1312), 1.06, Z(688), scene, 10); bx(.18, .02, .02, mSteel, X(1303), 1.21, Z(688));
