@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<link rel="apple-touch-icon" href="../icon-180.png">
+<link rel="icon" type="image/png" href="../icon-192.png">
+<link rel="manifest" href="../manifest.webmanifest">
+<meta name="theme-color" content="#8a5a2b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nhà 3D">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mô hình 3D – Ngoại thất</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#eef0f2;font-family:'Segoe UI',Arial,sans-serif}
+#ui{position:fixed;top:12px;left:12px;background:rgba(255,255,255,.92);padding:10px 14px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.15);font-size:13px;z-index:10;color:#333;max-width:330px}
+#ui h1{font-size:15px;margin:0 0 6px}
+#ui button{margin:6px 4px 0 0;padding:5px 10px;border:1px solid #b9a07c;background:#fff;border-radius:6px;cursor:pointer;font-size:12px}
+#ui button:hover{background:#f6efe4}
+#load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:#555;z-index:5}
+.lbl{background:rgba(45,36,28,.8);color:#fff;padding:3px 9px;border-radius:6px;font-size:11px;text-align:center;white-space:nowrap;pointer-events:none}
+.lbl b{display:block;font-size:13px;font-weight:600}
+canvas{touch-action:none}
+#tg{display:none}
+#layers{display:none;position:fixed;top:12px;right:12px;width:236px;background:rgba(255,255,255,.96);border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.18);z-index:20;font-size:13px;color:#333;overflow:hidden}
+#layers.open{display:block}
+#layers .hd{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#8a5a2b;color:#fff;font-weight:600}
+#layers .hd button{background:none;border:none;color:#fff;font-size:20px;line-height:1;cursor:pointer;padding:0 2px}
+#layers .list{padding:6px;max-height:60vh;overflow:auto}
+#layers label{display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;user-select:none}
+#layers label:hover{background:#f6efe4}
+#layers input{width:18px;height:18px;accent-color:#8a5a2b;margin:0}
+#layers .ft{display:flex;gap:6px;padding:8px 10px 10px;border-top:1px solid #eee}
+#layers .ft button{flex:1;padding:7px 0;border:1px solid #b9a07c;background:#fff;border-radius:6px;cursor:pointer;font-size:12px}
+#bLayer.on{background:#8a5a2b!important;color:#fff;border-color:#8a5a2b!important}
+@media (max-width:800px),(pointer:coarse){
+ #layers{top:10px;left:8px;right:8px;width:auto}
+ #layers .list{display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:42vh}
+ #layers label{background:#f7f3ee;padding:10px 8px;font-size:12.5px;gap:8px}
+ #layers .ft button{padding:9px 0;font-size:13px}
+}
+@media (max-width:800px),(pointer:coarse){
+ #ui{top:auto;bottom:10px;left:8px;right:8px;max-width:none;padding:8px 10px;font-size:12px}
+ #ui h1{font-size:13px;margin:0 0 2px}
+ #ui button{padding:7px 9px;font-size:12px;margin:4px 3px 0 0}
+ #ui.min .body{display:none}
+ #tg{display:inline-block;float:right;margin:0!important}
+ .lbl{font-size:9px;padding:2px 6px}.lbl b{font-size:11px}
+}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="load">Đang tải mô hình… <span id="pct"></span></div>
+<div id="ui">
+  <button id="tg">Ẩn/hiện</button><h1><a href="../" style="color:#8a5a2b;text-decoration:none;font-weight:600">← Chọn</a> · Mô hình 3D – Ngoại thất</h1>
+  <div class="body"><span id="hint">Chuột trái: xoay · Chuột phải: kéo · Cuộn: phóng to</span><br>
+  <button data-v="iso">Góc ISO</button><button data-v="iso2">Góc ISO 2</button><button data-v="top">Từ trên xuống</button><br>
+  <button id="bLayer">☰ Lớp</button><button id="bShadow">Bật/tắt bóng</button><button id="bPng">Lưu ảnh PNG</button></div>
+</div>
+<div id="layers"><div class="hd">Ẩn / hiện lớp<button id="lyClose" aria-label="Đóng">×</button></div>
+<div class="list" id="lyList"></div><div class="ft"><button id="lyAll">Hiện tất cả</button><button id="lyNone">Ẩn tất cả</button></div></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+// ===== Nhãn phòng: [tên, phụ đề, x, z] (mét, theo toạ độ mô hình). Sửa tại đây nếu cần. =====
+const LABELS = []; // mô hình ngoại thất: không đặt nhãn phòng
+
+const params = new URLSearchParams(location.search);
+const SHOT = params.has('shot');
+const STYLE2 = !params.has('mau-cu');   // BẢN MÀU MỚI theo ảnh render (thêm ?mau-cu để xem màu cũ)
+const MOBILE = matchMedia('(pointer:coarse)').matches || innerWidth < 800;
+if (MOBILE) document.getElementById('hint').textContent = '1 ngón: xoay · 2 ngón: phóng to / kéo';
+document.getElementById('tg').onclick = () => document.getElementById('ui').classList.toggle('min');
+if (SHOT) document.getElementById('ui').style.display = 'none';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.NeutralToneMapping;   // giữ màu vật liệu gần SketchUp
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+const lblR = new CSS2DRenderer(); lblR.setSize(innerWidth, innerHeight);
+lblR.domElement.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none'; document.body.appendChild(lblR.domElement);
+
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xeef0f2);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), .04).texture;
+scene.environmentIntensity = .55;
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8d4cc, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.castShadow = true; scene.add(sun, sun.target);
+sun.shadow.mapSize.set(MOBILE ? 2048 : 4096, MOBILE ? 2048 : 4096); sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
+
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, .05, 2000); window.__cam = camera;
+const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+const C = new THREE.Vector3(); let R = 10;
+const views = {
+  iso: () => camera.position.set(C.x - R * .9, C.y + R * 1.5, C.z + R * 1.3),
+  iso2: () => camera.position.set(C.x + R * .9, C.y + R * 1.5, C.z + R * 1.3),
+  top: () => camera.position.set(C.x, C.y + R * 2.6, C.z + R * .35),
+};
+function setView(v) {
+  views[v]();
+  const fit = Math.max(1, 1.05 / camera.aspect);   // màn hình dọc (điện thoại): lùi camera để thấy trọn nhà
+  camera.position.sub(C).multiplyScalar(fit).add(C);
+  controls.target.copy(C); controls.update();
+}
+document.querySelectorAll('[data-v]').forEach(b => b.onclick = () => setView(b.dataset.v));
+
+// ===== Chỉnh màu theo yêu cầu (đổi theo tên vật liệu trong SketchUp) =====
+function woodCanvas(base, vertical = false) {
+  const S = 1024, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  g.fillStyle = `rgb(${base})`; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 160; i++) {
+    const y = Math.random() * S, a = Math.random() * .16 + .03, f = Math.random() * .02 + .004, ph = Math.random() * 6, amp = Math.random() * 10;
+    g.strokeStyle = Math.random() < .6 ? `rgba(90,55,25,${a})` : `rgba(255,245,225,${a})`; g.lineWidth = Math.random() * 2.5 + .5; g.beginPath();
+    for (let x = 0; x <= S; x += 16) { const yy = y + Math.sin(x * f + ph) * amp; x ? g.lineTo(x, yy) : g.moveTo(x, yy); }
+    g.stroke();
+  }
+  for (let i = 0; i < 1500; i++) { g.fillStyle = `rgba(80,45,20,${Math.random() * .2})`; g.fillRect(Math.random() * S, Math.random() * S, 4 + Math.random() * 14, 1); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
+  if (vertical) { t.center.set(.5, .5); t.rotation = Math.PI / 2; }
+  return t;
+}
+const texAnCuong = woodCanvas([224, 198, 164]);          // gỗ công nghiệp An Cường vân sồi sáng
+const texSlat = woodCanvas([208, 170, 126], true);       // vách nan như ảnh v8
+function brighten(t, k) {                                // làm sáng ảnh texture, giữ nguyên cách dán
+  const img = t.image, c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.filter = `brightness(${k}) saturate(.95)`; g.drawImage(img, 0, 0);
+  const n = new THREE.CanvasTexture(c);
+  for (const p of ['flipY', 'wrapS', 'wrapT', 'colorSpace', 'channel', 'rotation']) n[p] = t[p];
+  n.repeat.copy(t.repeat); n.offset.copy(t.offset); n.center.copy(t.center); n.anisotropy = 8;
+  return n;
+}
+const WORSHIP = new Set(['ARC78', '*11', '20200917215535_57147', 'Material #25742', 'Material #2523742235', 'hoa van 2', 'ho phu', 'hoa van 4',
+  'hoa van ban tho 1', 'Material #063', 'hoa van 3', 'dau rong', 'yem ban tho']);
+function applyOverrides(root) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const m = o.material, n = m.name;
+    if (n === 'default_face_material' || n === 'default_face_material255') m.color.set(0xd2cbc1);          // tường tối xuống
+    else if (n === '[Wood Cherry Original]1') { m.map = texSlat; m.color.set(0xffffff); }                   // vách nan tivi
+    else if (n === 'Color A04' || n === 'Material~12') { m.map = texAnCuong; m.color.set(0xffffff); m.roughness = .55; } // sofa, kệ tivi, ghế ăn
+    else if (n === 'Material #-2147483510') m.color.set(0xcdc4b6);                                           // đệm sofa sáng hơn
+    else if (n === 'suade') { m.map = texAnCuong; m.color.set(0xffffff); }                                   // vỏ ghế ăn
+    else if (WORSHIP.has(n)) {                                                                               // phòng thờ sáng lên
+      m.color.set(0xffffff);
+      if (m.map) m.map = brighten(m.map, n === 'ARC78' ? 2.0 : n === '*11' || n === '20200917215535_57147' ? 1.25 : 2.3);
+    }
+    m.needsUpdate = true;
+  });
+  const p = new THREE.PointLight(0xffe2b8, 6, 6, 1.5); p.position.set(43.3, 3.3, -103.7); scene.add(p); // đèn phòng thờ
+}
+
+// ===== Chỉnh màu mô hình ngoại thất v4 (Claude 4.glb) =====
+const V4 = {
+  roof:  { names: ['[Roofing Shingles GAF Estates]1'], color: 0xe6ecf4 },            // ngói xanh sáng lên
+  wall:  { names: ['default_face_material', 'default_face_material85', 'NAP wall white1'], color: 0xd6d3cd }, // tường nhà + tường rào tối đi
+  door:  { names: ['Wood Cherry Original', 'Material10', 'Wood Board Cork'], color: 0xffffff, k: 1.8 }, // cửa gỗ sáng lên
+  doorPanel: { names: ['[Color D05]1'], color: 0xd2a473, k: 1.35 },                          // mặt cánh cửa: ngả màu gỗ
+  step:  { names: ['[Concrete Aggregate Smoke]1'], color: 0xffffff, k: 1.35 },               // đá bậc, hè sáng lên
+  tread: { names: ['[Asphalt New]1'], color: 0xd8c8b0, k: 1.8 },                              // mặt bậc nâu sáng lên
+};
+function applyV4(root) {
+  const done = new Set(), map = {};
+  for (const r of Object.values(V4)) for (const n of r.names) map[n] = r;
+  root.traverse(o => {
+    if (!o.isMesh || done.has(o.material)) return;
+    const m = o.material, r = map[m.name]; done.add(m);
+    if (!r) return;
+    m.color.set(r.color);
+    if (r.k && m.map) m.map = brighten(m.map, r.k);
+    m.needsUpdate = true;
+  });
+}
+
+// ===== Gạch lát sân: 30×60 cm, vân đá xám đen, ron xám trắng 3 mm, lát so le nửa viên =====
+const TILE_SPAN = 1.2;                                     // 1 ô ảnh = 1.2 m × 1.2 m (2 viên dài × 4 hàng)
+function slateTex() {
+  const S = 2048, px = S / TILE_SPAN, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  g.fillStyle = '#c3c7ca'; g.fillRect(0, 0, S, S);         // màu ron
+  const TW = .6 * px, TH = .3 * px, J = .003 * px;          // viên 60×30, ron 3 mm
+  for (let r = 0; r < 4; r++) for (let k = -1; k < 2; k++) {
+    const x = k * TW + (r % 2) * TW / 2, y = r * TH;
+    g.save(); g.beginPath(); g.rect(x + J / 2, y + J / 2, TW - J, TH - J); g.clip();
+    const v = rnd(-7, 7), B = STYLE2 ? [104, 110, 118] : [54, 61, 70]; g.fillStyle = `rgb(${B[0] + v},${B[1] + v},${B[2] + v})`; g.fillRect(x, y, TW, TH);
+    for (let i = 0; i < 900; i++) {                         // vân đá: vệt sáng tối mảnh, chạy xiên
+      const a = rnd(.03, .1), l = Math.random() < .5;
+      g.fillStyle = l ? `rgba(150,160,172,${a})` : `rgba(25,30,36,${a})`;
+      g.beginPath(); g.ellipse(rnd(x, x + TW), rnd(y, y + TH), rnd(6, 60), rnd(1, 5), rnd(-.5, .1), 0, 7); g.fill();
+    }
+    for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '200,205,210' : '15,18,22'},${rnd(.04, .14)})`; g.fillRect(rnd(x, x + TW), rnd(y, y + TH), 2, 2); }
+    g.restore();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16;
+  return t;
+}
+const mTile = new THREE.MeshStandardMaterial({ map: slateTex(), roughness: .8, metalness: 0, side: THREE.DoubleSide });
+function tileMesh(tris, y) {                               // tris: mảng [x,z] ×3; UV theo toạ độ thật để mạch liền
+  const pos = [], uv = [];
+  for (const [x, yy, z] of tris) { pos.push(x, yy ?? y, z); uv.push(x / TILE_SPAN, -z / TILE_SPAN); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mTile); m.receiveShadow = true; return m;
+}
+
+// ===== Gạch thẻ ốp chân nhà mặt trước (dày 1 cm, phủ lên dải mặt bị chồng hình gây nháy) =====
+function ledgeTex() { // đá ốp lát mỏng kiểu ảnh render: thanh đá dài ngắn xen kẽ, xám – be – nâu
+  const S = 1024, c = document.createElement('canvas'); c.width = 2 * S; c.height = S; const g = c.getContext('2d');
+  g.fillStyle = '#3e3b37'; g.fillRect(0, 0, 2 * S, S);
+  const PAL = [[150, 142, 130], [118, 112, 104], [96, 92, 88], [172, 162, 144], [128, 116, 100], [84, 82, 80]];
+  for (let y = 0; y < S; ) {
+    const h = 26 + Math.random() * 30;
+    for (let x = -Math.random() * 120; x < 2 * S; ) {
+      const w = 90 + Math.random() * 260, p = PAL[Math.random() * PAL.length | 0], v = Math.random() * 20 - 10;
+      g.fillStyle = `rgb(${p[0] + v | 0},${p[1] + v | 0},${p[2] + v | 0})`; g.fillRect(x + 3, y + 3, w - 6, h - 6);
+      for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(${Math.random() < .5 ? '255,250,240' : '30,28,25'},${Math.random() * .18})`; g.fillRect(x + 3 + Math.random() * (w - 8), y + 3 + Math.random() * (h - 8), 3 + Math.random() * 14, 1 + Math.random() * 3); }
+      x += w;
+    }
+    y += h;
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; return t;
+}
+function brickTex() { // gạch thẻ 24×6 cm, tông xám trắng lẫn nâu đỏ (giống bên nội thất), ảnh phủ 2 m ngang × 1 m cao
+  if (STYLE2) return ledgeTex();
+  const S = 1024, c = document.createElement('canvas'); c.width = 2 * S; c.height = S; const g = c.getContext('2d');
+  g.fillStyle = '#5f5d5a'; g.fillRect(0, 0, 2 * S, S);                 // mạch vữa (sẫm, hợp với gạch lát sân)
+  const bw = S / 4, bh = S / 16;
+  for (let r = 0; r < 16; r++) for (let i = -1; i < 9; i++) {
+    const x = i * bw + (r % 2 ? bw / 2 : 0), y = r * bh, t = Math.random();
+    const base = t < .55 ? [122, 124, 128] : t < .8 ? [100, 102, 107] : t < .93 ? [118, 96, 88] : [140, 141, 144];   // xám sẫm ngả xanh nhẹ
+    const v = Math.random() * 16 - 8;
+    g.fillStyle = `rgb(${base[0] + v | 0},${base[1] + v | 0},${base[2] + v | 0})`; g.fillRect(x + 4, y + 4, bw - 8, bh - 8);
+    for (let k = 0; k < 60; k++) { g.fillStyle = `rgba(${Math.random() < .5 ? '70,50,45' : '45,47,50'},${Math.random() * .35})`; g.fillRect(x + 4 + Math.random() * (bw - 10), y + 4 + Math.random() * (bh - 10), 2 + Math.random() * 6, 2 + Math.random() * 3); }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; return t;
+}
+function cladding(x0, x1, y0, y1, z, th) { return cladBox(x0, x1, y0, y1, z, z + th); }   // tấm ốp mặt trước nhà
+function cladBox(x0, x1, y0, y1, z0, z1) {               // tấm ốp gạch thẻ dạng hộp, UV theo mét
+  const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0); g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), zz = p.getZ(i);
+    if (Math.abs(n.getZ(i)) > .5) uv.setXY(i, x / 2, y); else if (Math.abs(n.getX(i)) > .5) uv.setXY(i, zz / 2, y); else uv.setXY(i, x / 2, zz);
+  }
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: brickTex(), roughness: .85 })); m.castShadow = m.receiveShadow = true; return m;
+}
+
+// ===== Lớp phòng thờ 2 + thay mặt sân trống bằng gạch =====
+const LAYER = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
+const ROOM = { x0: 31.75, x1: 36.85, z0: -85.95, z1: -80.9 }; // vùng phòng thờ 2 (m)
+// tường rào bên trái (đoạn chung với phòng thờ 2): mặt ngoài A→B, mặt trong C→D
+const FA = [31.723, -80.835], FB = [32.296, -85.127], FC = [31.849, -80.948];
+const FN = (() => { const dx = FB[0] - FA[0], dz = FB[1] - FA[1], l = Math.hypot(dx, dz); return [-dz / l, dx / l]; })();
+const fs = (x, z) => FN[0] * x + FN[1] * z, F0 = Math.min(fs(...FA), fs(...FC)) - .006, F1 = Math.max(fs(...FA), fs(...FC)) + .006;
+const inFence = (x, z) => { const s = fs(x, z); return s >= F0 && s <= F1 && z >= -85.135 && z <= -80.82; };
+function splitModel(root) {
+  root.updateMatrixWorld(true);
+  const yardTris = [], meshes = [];
+  root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  const V = new THREE.Vector3(), roomBox = new THREE.Box3(new THREE.Vector3(ROOM.x0, -1, ROOM.z0), new THREE.Vector3(ROOM.x1, 7, ROOM.z1));
+  for (const o of meshes) {
+    const isWall = o.material.name === 'default_face_material';
+    o.geometry.computeBoundingBox();
+    const wb = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+    if (!isWall && !wb.intersectsBox(roomBox)) continue;
+    const g = o.geometry, p = g.attributes.position;
+    const idx = g.index ? g.index.array : Uint32Array.from({ length: p.count }, (_, i) => i);
+    const keep = [], room = [], P = [[], [], []];
+    for (let t = 0; t < idx.length; t += 3) {
+      for (let k = 0; k < 3; k++) { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); P[k] = [V.x, V.y, V.z]; }
+      const cx = (P[0][0] + P[1][0] + P[2][0]) / 3, cy = (P[0][1] + P[1][1] + P[2][1]) / 3, cz = (P[0][2] + P[1][2] + P[2][2]) / 3;
+      const inRoom = cx > ROOM.x0 && cx < ROOM.x1 && cz > ROOM.z0 && cz < ROOM.z1 && cy < 7
+        && !P.some(q => q[0] > 36.9 || q[2] < -85.96)                       // tường rào trước (dài) + phía sau
+        && !(isWall && P.every(q => inFence(q[0], q[2])))                   // tường rào trái: giữ nguyên
+        && !(isWall && P.every(q => q[0] < 32.46) && Math.max(P[0][1], P[1][1], P[2][1]) <= 2.73 && Math.min(P[0][2], P[1][2], P[2][2]) < -85.12
+             && !P.every(q => Math.abs(q[0] - 32.396) < .003));             // trụ trang trí của tường rào sát góc phòng
+      if (inRoom) { room.push(idx[t], idx[t + 1], idx[t + 2]); continue; }
+      const flat = P.every(q => Math.abs(q[1]) < .02), ny = (() => {
+        const ux = P[1][0] - P[0][0], uy = P[1][1] - P[0][1], uz = P[1][2] - P[0][2], wx = P[2][0] - P[0][0], wy = P[2][1] - P[0][1], wz = P[2][2] - P[0][2];
+        const nx = uy * wz - uz * wy, nY = uz * wx - ux * wz, nz = ux * wy - uy * wx; return Math.abs(nY) / (Math.hypot(nx, nY, nz) || 1); })();
+      if (isWall && flat && ny > .95) { yardTris.push(P[0], P[1], P[2]); continue; } // mặt sân trắng → gạch
+      keep.push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!room.length && keep.length * 1 === idx.length) continue;
+    g.setIndex(keep);
+    if (room.length) {
+      const g2 = new THREE.BufferGeometry(); for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.setIndex(room);
+      const m2 = new THREE.Mesh(g2, o.material); m2.castShadow = m2.receiveShadow = true;
+      m2.position.copy(o.position); m2.quaternion.copy(o.quaternion); m2.scale.copy(o.scale); o.parent.add(m2); LAYER.tho2.push(m2);
+    }
+  }
+  if (yardTris.length) scene.add(tileMesh(yardTris));
+  // sân lát gạch: toàn bộ phần đất bên trong tường rào (mép theo mặt trong tường rào), đặt thấp hơn cốt 0 một chút
+  // để bậc, bồn cây, nền nhà... nằm đè lên trên, không bị nháy hình; phía dưới phòng thờ 2 cũng có gạch (hiện khi tắt phòng)
+  const YARD = [[31.85, -80.95], [32.41, -85.13], [32.67, -87.11], [33.08, -88.0], [33.53, -91.3], [33.41, -92.61], [40.89, -92.32],
+    [55.47, -91.83], [56.85, -84.02], [51.28, -82.97], [51.1, -82.1], [48.28, -81.59]];
+  const tri = THREE.ShapeUtils.triangulateShape(YARD.map(([x, z]) => new THREE.Vector2(x, z)), []);
+  scene.add(tileMesh(tri.flatMap(t => t.map(i => [YARD[i][0], -.012, YARD[i][1]]))));
+}
+// tách mọi tam giác nằm trọn trong 1 hộp (trừ vật liệu tường, nền) thành lớp riêng — dùng cho tủ đông
+function boxLayer(root, key, b0, b1, skip) {
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3(new THREE.Vector3(...b0), new THREE.Vector3(...b1)), V = new THREE.Vector3(), meshes = [];
+  root.traverse(o => { if (o.isMesh && !skip.includes(o.material.name)) meshes.push(o); });
+  for (const o of meshes) {
+    o.geometry.computeBoundingBox();
+    if (!o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).intersectsBox(box)) continue;
+    const g = o.geometry, p = g.attributes.position, idx = g.index.array, keep = [], take = [];
+    for (let t = 0; t < idx.length; t += 3) {
+      let inside = true;
+      for (let k = 0; k < 3 && inside; k++) { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); inside = box.containsPoint(V); }
+      (inside ? take : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!take.length) continue;
+    g.setIndex(keep);
+    const g2 = new THREE.BufferGeometry(); for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.setIndex(take);
+    const m2 = new THREE.Mesh(g2, o.material); m2.castShadow = m2.receiveShadow = true;
+    m2.position.copy(o.position); m2.quaternion.copy(o.quaternion); m2.scale.copy(o.scale); o.parent.add(m2); LAYER[key].push(m2);
+  }
+}
+
+// ===== Xe máy tay ga (dựng bằng khối đơn giản), đầu xe theo trục +x =====
+function scooter(main, trim) {
+  const grp = new THREE.Group();
+  const M = (c, r = .45, m = .1) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
+  const mMain = M(main, .3, .15), mTrim = M(trim, .35, .3), mBlack = M(0x1b1c1e, .7), mTyre = M(0x151515, .9), mChrome = M(0xc9cdd2, .25, .8);
+  const add = (geo, mat, x, y, z, rz = 0, rx = 0, ry = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); m.castShadow = m.receiveShadow = true; grp.add(m); return m; };
+  const rb = (lx, ly, lz, r) => new RoundedBoxGeometry(lx, ly, lz, 3, r);
+  const cyl = (r, h, r2 = r) => new THREE.CylinderGeometry(r2, r, h, 20);
+  for (const x of [.64, -.64]) {                                            // bánh xe
+    add(new THREE.TorusGeometry(.215, .062, 12, 32), mTyre, x, .277, 0);
+    add(cyl(.17, .07), mChrome, x, .277, 0, 0, Math.PI / 2);
+    add(cyl(.05, .1), mBlack, x, .277, 0, 0, Math.PI / 2);
+  }
+  add(rb(.72, .34, .32, .12), mMain, -.32, .6, 0);                          // thân sau
+  add(rb(.3, .24, .26, .1), mMain, -.74, .66, 0);                           // đuôi xe thon lại
+  add(rb(.5, .12, .3, .05), mTrim, -.62, .58, 0);                           // ốp hông
+  add(rb(.82, .1, .3, .05), mBlack, -.36, .81, 0);                          // yên
+  add(rb(.3, .05, .32, .02), mBlack, -.85, .79, 0);                         // baga sau
+  add(rb(.45, .08, .32, .03), mBlack, .24, .33, 0);                         // sàn để chân
+  add(rb(.09, .66, .36, .04), mMain, .54, .66, 0, -.3);                     // yếm trước
+  add(rb(.05, .5, .3, .02), mBlack, .47, .62, 0, -.3);                      // ốp trong yếm (màu tối)
+  add(rb(.36, .07, .14, .03), mMain, .66, .55, 0, .12);                     // dè trước
+  add(cyl(.026, .36), mChrome, .6, .44, .05, .28);                          // phuộc trước (phần lộ dưới yếm)
+  add(cyl(.026, .36), mChrome, .6, .44, -.05, .28);
+  add(rb(.24, .12, .4, .05), mMain, .48, 1.03, 0);                          // đầu xe
+  add(rb(.06, .07, .24, .03), M(0xfff6dc, .2, .1), .61, 1.03, 0);           // đèn pha
+  add(cyl(.016, .62), mBlack, .44, 1.08, 0, 0, Math.PI / 2);                // tay lái
+  for (const z of [.27, -.27]) {
+    add(cyl(.022, .12), mBlack, .44, 1.08, z, 0, Math.PI / 2);              // tay nắm
+    add(cyl(.008, .2), mChrome, .42, 1.18, z * .85, 0, .3 * Math.sign(z));  // cần gương
+    add(new THREE.SphereGeometry(.045, 16, 10).scale(.35, .7, 1.1), mBlack, .4, 1.27, z * .95);
+  }
+  add(rb(.5, .14, .16, .05), M(0x3a3c40, .6, .3), -.42, .3, -.08);          // máy, càng sau
+  add(cyl(.03, .42), mChrome, -.5, .33, .17, Math.PI / 2 + .1);             // ống xả
+  add(rb(.04, .06, .2, .02), M(0xc0161c, .3), -.86, .66, 0);                // đèn hậu
+  return grp;
+}
+function addScooters() {
+  const s1 = scooter(0xb51f2a, 0x202124), s2 = scooter(0x24262a, 0xb9bec5);
+  s1.position.set(44.45, 0, -83.5); s2.position.set(44.5, 0, -82.6);
+  for (const s of [s1, s2]) { scene.add(s); LAYER.xemay.push(s); }
+}
+
+// ===== Tường nhà màu kem (như mô hình nội thất), tường rào giữ màu cũ =====
+const CREAM = 0xf1e9dd;
+function recolorHouse(root) {
+  root.updateMatrixWorld(true);
+  const V = new THREE.Vector3(), meshes = [], mats = new Map();
+  root.traverse(o => { if (o.isMesh && V4.wall.names.includes(o.material.name)) meshes.push(o); });
+  const F7a = [51.325, -82.92], F7b = [56.915, -83.975];                   // tường rào phải-trước (chéo)
+  const d7 = (x, z) => { const dx = F7b[0] - F7a[0], dz = F7b[1] - F7a[1], l = Math.hypot(dx, dz); return Math.abs(((x - F7a[0]) * dz - (z - F7a[1]) * dx) / l); };
+  const inHouse = q => q[0] > 39.3 && q[0] < 55.3 && q[2] > -92.45 && q[2] < -83.3 && d7(q[0], q[2]) > .09;
+  for (const o of meshes) {
+    const g = o.geometry, p = g.attributes.position, idx = g.index.array, keep = [], take = [];
+    for (let t = 0; t < idx.length; t += 3) {
+      const P = [0, 1, 2].map(k => { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); return [V.x, V.y, V.z]; });
+      const backFence = P.every(q => q[2] < -92.28 && q[0] < 43.4);
+      (P.every(inHouse) && !backFence ? take : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!take.length) continue;
+    if (!mats.has(o.material)) { const m = o.material.clone(); m.color.set(CREAM); mats.set(o.material, m); }
+    g.setIndex(keep);
+    const g2 = new THREE.BufferGeometry(); for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.setIndex(take);
+    const m2 = new THREE.Mesh(g2, mats.get(o.material)); m2.castShadow = m2.receiveShadow = true;
+    m2.position.copy(o.position); m2.quaternion.copy(o.quaternion); m2.scale.copy(o.scale); o.parent.add(m2);
+  }
+  for (const m of LAYER.tho2) if (V4.wall.names.includes(m.material.name)) {      // tường phòng thờ 2 cũng màu kem
+    if (!mats.has(m.material)) { const c = m.material.clone(); c.color.set(CREAM); mats.set(m.material, c); }
+    m.material = mats.get(m.material);
+  }
+}
+
+// ===== Ốp đá 2 cm lên cổ bậc, quanh bệ hoa, mép hè (khối hè bên trái, hướng ra cổng) — che mặt bị dựng trùng gây nháy =====
+function stoneSkin(root, R) {
+  root.updateMatrixWorld(true);
+  const CONC = ['Concrete Aggregate Smoke', '[Concrete Aggregate Smoke]1'], SOLID = [...CONC, '[Asphalt New]1'];
+  const TH = .02, UVS = 3.2808;                                             // UVS: ảnh đá lặp mỗi 1 ft như trên mặt hè
+  let stoneMat = null; const solids = [], tris = [], V = new THREE.Vector3();
+  root.traverse(o => { if (!o.isMesh) return; if (SOLID.includes(o.material.name)) solids.push(o); if (o.material.name === '[Concrete Aggregate Smoke]1') stoneMat = o.material; });
+  const rc = new THREE.Raycaster(); rc.firstHitOnly = true;
+  const solidAt = (x, z, y) => { rc.set(new THREE.Vector3(x, 5, z), new THREE.Vector3(0, -1, 0)); const h = rc.intersectObjects(solids, false)[0]; return h && h.point.y > y + .005; };
+  const seen = new Set();
+  for (const o of solids) {
+    if (!CONC.includes(o.material.name)) continue;
+    const g = o.geometry, p = g.attributes.position, idx = g.index.array;
+    for (let t = 0; t < idx.length; t += 3) {
+      const P = [0, 1, 2].map(k => { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); return [V.x, V.y, V.z]; });
+      const c = [0, 1, 2].map(i => (P[0][i] + P[1][i] + P[2][i]) / 3);
+      if (!(c[0] > R.x0 && c[0] < R.x1 && c[2] > R.z0 && c[2] < R.z1)) continue;
+      const ax = Math.max(...P.map(q => q[0])) - Math.min(...P.map(q => q[0])) < .002 ? 0 : Math.max(...P.map(q => q[2])) - Math.min(...P.map(q => q[2])) < .002 ? 2 : -1;
+      if (ax < 0) continue;                                                 // chỉ lấy mặt đứng thẳng theo trục
+      const key = P.map(q => q.map(v => v.toFixed(3)).join(',')).sort().join('|'); if (seen.has(key)) continue; seen.add(key);
+      const ym = c[1], s = [0, 0, 0]; s[ax] = .03;
+      const plus = solidAt(c[0] + s[0], c[2] + s[2], ym), minus = solidAt(c[0] - s[0], c[2] - s[2], ym);
+      if (plus === minus) continue;                                          // không rõ phía ngoài: bỏ qua
+      const dir = plus ? -1 : 1;                                             // phía ngoài = phía không có khối đá
+      tris.push({ P, ax, dir });
+    }
+  }
+  const pos = [], uv = [];
+  const uvOf = (q, ax, face) => face === 'h' ? [q[0] * UVS, q[2] * UVS] : ax === 0 ? [q[2] * UVS, q[1] * UVS] : [q[0] * UVS, q[1] * UVS];
+  const push = (a, b, c, ax, face) => { for (const q of [a, b, c]) { pos.push(...q); uv.push(...uvOf(q, ax, face)); } };
+  for (const { P, ax, dir } of tris) {
+    const h = ax === 0 ? 2 : 0, hs = P.map(q => q[h]), h0 = Math.min(...hs), h1 = Math.max(...hs);
+    const lift = q => { const r = [q[0], q[1] > .005 ? q[1] + .002 : q[1], q[2]];   // nhích đáy lên 2 mm để không trùng mặt bậc bên dưới
+      if (Math.abs(q[h] - h0) < 1e-4) r[h] -= TH; else if (Math.abs(q[h] - h1) < 1e-4) r[h] += TH;   // nới 2 cm ở 2 đầu để kín góc
+      return r; };
+    const A = P.map(lift), B = A.map(q => { const r = q.slice(); r[ax] += dir * TH; return r; });
+    push(B[0], B[1], B[2], ax, 'v');                                         // mặt ngoài
+    for (let i = 0; i < 3; i++) {                                            // các cạnh bao quanh (mặt trên, dưới, hai đầu)
+      const j = (i + 1) % 3, flat = Math.abs(A[i][1] - A[j][1]) < .003;
+      push(A[i], A[j], B[j], ax, flat ? 'h' : 'v'); push(A[i], B[j], B[i], ax, flat ? 'h' : 'v');
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, stoneMat.clone()); m.material.side = THREE.DoubleSide; m.castShadow = m.receiveShadow = true; scene.add(m);
+  return tris.length;
+}
+
+// ===== Chữa nháy: bỏ mặt dựng trùng, nhích mặt nằm đè lên một chút =====
+function eachTri(root, mats, box, fn) {                                     // duyệt tam giác (toạ độ thật) nằm trọn trong hộp
+  root.updateMatrixWorld(true);
+  const B = new THREE.Box3(new THREE.Vector3(...box[0]), new THREE.Vector3(...box[1])), V = new THREE.Vector3(), list = [];
+  root.traverse(o => { if (o.isMesh && mats.includes(o.material.name) && o.geometry.index) list.push(o); });
+  for (const o of list) {
+    o.geometry.computeBoundingBox(); if (!o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).intersectsBox(B)) continue;
+    const g = o.geometry, p = g.attributes.position, idx = g.index.array, keep = [], hit = [];
+    for (let t = 0; t < idx.length; t += 3) {
+      const P = [0, 1, 2].map(k => { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); return V.clone(); });
+      const sel = P.every(q => B.containsPoint(q)) && fn(P);
+      (sel ? hit : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (hit.length) { g.setIndex(keep); yieldTris(o, hit); }
+  }
+}
+let yieldTris = () => {};
+function dropCovered(root, dropMats, keepMats, box) {                       // bỏ tam giác đã có mặt khác nằm trùng ngay chỗ đó
+  // gom tam giác của vật liệu giữ lại theo mặt phẳng song song trục (mặt đứng / mặt nằm), so điểm giữa trong 2D
+  const axisOf = P => { for (let a = 0; a < 3; a++) if (Math.abs(P[0].getComponent(a) - P[1].getComponent(a)) < 1e-3 && Math.abs(P[0].getComponent(a) - P[2].getComponent(a)) < 1e-3) return a; return -1; };
+  const planes = new Map(); yieldTris = () => {};
+  const B = new THREE.Box3(new THREE.Vector3(...box[0]), new THREE.Vector3(...box[1])).expandByScalar(.05), V = new THREE.Vector3();
+  root.traverse(o => { if (!o.isMesh || !keepMats.includes(o.material.name) || !o.geometry.index) return;
+    const p = o.geometry.attributes.position, idx = o.geometry.index.array;
+    for (let t = 0; t < idx.length; t += 3) {
+      const P = [0, 1, 2].map(k => { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); return V.clone(); });
+      if (!P.some(q => B.containsPoint(q))) continue;
+      const a = axisOf(P); if (a < 0) continue;
+      const key = a + ':' + Math.round(P[0].getComponent(a) * 1000); const [u, v] = [[1, 2], [0, 2], [0, 1]][a];
+      (planes.get(key) || planes.set(key, []).get(key)).push(P.map(q => [q.getComponent(u), q.getComponent(v)]));
+    } });
+  const inTri = (x, y, T) => { const d = (p, q, r) => (p[0] - r[0]) * (q[1] - r[1]) - (q[0] - r[0]) * (p[1] - r[1]);
+    const s = [d([x, y], T[0], T[1]), d([x, y], T[1], T[2]), d([x, y], T[2], T[0])]; return s.every(e => e >= -1e-7) || s.every(e => e <= 1e-7); };
+  eachTri(root, dropMats, box, P => {
+    const a = axisOf(P); if (a < 0) return false;
+    const [u, v] = [[1, 2], [0, 2], [0, 1]][a], c = P[0].clone().add(P[1]).add(P[2]).divideScalar(3), w = Math.round(P[0].getComponent(a) * 1000);
+    for (const k of [w - 1, w, w + 1]) for (const T of planes.get(a + ':' + k) || []) if (inTri(c.getComponent(u), c.getComponent(v), T)) return true;
+    return false;
+  });
+}
+function liftTris(root, mats, box, off) {                                   // tách tam giác ra và nhích đi 1 đoạn nhỏ
+  const out = [];
+  yieldTris = (o, hit) => {
+    const g = o.geometry, p = g.attributes.position, uv = g.attributes.uv, pos = [], uvs = [], V = new THREE.Vector3();
+    for (const i of hit) { V.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld).add(off); pos.push(V.x, V.y, V.z); if (uv) uvs.push(uv.getX(i), uv.getY(i)); }
+    const g2 = new THREE.BufferGeometry(); g2.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    if (uv) g2.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g2.computeVertexNormals();
+    const m = new THREE.Mesh(g2, o.material); m.castShadow = m.receiveShadow = true; scene.add(m); out.push(m);
+  };
+  eachTri(root, mats, box, () => true); yieldTris = () => {};
+  return out;
+}
+function riserBrown(root) {                                                 // cổ bậc dưới mặt bậc gỗ nâu đỏ: cùng màu nâu đỏ
+  let mat = null; const tris = [];
+  yieldTris = () => {};
+  root.traverse(o => { if (o.isMesh && o.material.name === '[Asphalt New]1' && !mat) mat = o.material; });
+  const V = new THREE.Vector3();
+  root.traverse(o => { if (!o.isMesh || o.material.name !== '[Asphalt New]1' || !o.geometry.index) return;
+    const p = o.geometry.attributes.position, idx = o.geometry.index.array;
+    for (let t = 0; t < idx.length; t += 3) {
+      const P = [0, 1, 2].map(k => { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); return [V.x, V.y, V.z]; });
+      if (!P.every(q => Math.abs(q[1] - P[0][1]) < .002) || P[0][1] > .8) continue;
+      const xm = Math.min(...P.map(q => q[0])), e = P.filter(q => Math.abs(q[0] - xm) < 1e-3);
+      if (e.length === 2 && Math.abs(e[0][2] - e[1][2]) > .01) tris.push([xm, P[0][1], Math.min(e[0][2], e[1][2]), Math.max(e[0][2], e[1][2])]);
+    }
+  });
+  const pos = [], uv = [], U = 3.2808;
+  const quad = (a, b, c, d, f) => { for (const q of [a, b, c, a, c, d]) { pos.push(...q); uv.push(...f(q)); } };
+  for (const [x, h, z0, z1] of tris) {
+    const X0 = x - .025, X1 = x, Y0 = Math.max(0, h - .15) + .004, Y1 = h + .003;
+    const fz = q => [q[2] * U, q[1] * U], fy = q => [q[2] * U, q[0] * U], fx = q => [q[0] * U, q[1] * U];
+    quad([X0, Y0, z0], [X0, Y0, z1], [X0, Y1, z1], [X0, Y1, z0], fz);              // mặt đứng
+    quad([X0, Y1, z0], [X0, Y1, z1], [X1, Y1, z1], [X1, Y1, z0], fy);              // mặt trên (mép mũi bậc)
+    quad([X0, Y0, z0], [X1, Y0, z0], [X1, Y1, z0], [X0, Y1, z0], fx);              // 2 đầu
+    quad([X0, Y0, z1], [X1, Y0, z1], [X1, Y1, z1], [X0, Y1, z1], fx);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat.clone()); m.material.side = THREE.DoubleSide; m.castShadow = m.receiveShadow = true; scene.add(m);
+  return tris.length;
+}
+function fixFlicker(root) {
+  const CS = 'Concrete Aggregate Smoke', CS1 = '[Concrete Aggregate Smoke]1';
+  const porch = [[39.4, -.02, -92.42], [42.36, .77, -84.3]];
+  const nBrown = riserBrown(root);                                          // làm trước khi tách mặt bậc nâu đỏ ra
+  dropCovered(root, [CS, 'default_face_material'], [CS1], porch);            // hè trái: mặt bậc, mặt hè dựng trùng
+  liftTris(root, ['[Asphalt New]1'], porch, new THREE.Vector3(0, .003, 0)); // mặt bậc gỗ nâu đỏ nhích lên 3 mm
+  dropCovered(root, ['[Color D05]1'], ['Wood Cherry Original'], [[41.4, .7, -91.4], [42.6, 3.0, -84.9]]); // 2 cánh cửa gỗ hiên trái
+  liftTris(root, ['<DarkGray>1'], [[42.2, .74, -84.35], [55.2, 1.44, -84.32]], new THREE.Vector3(0, 0, .005)); // dải sơn tím chân tường
+  liftTris(root, ['Material~1'], [[49.9, 3.7, -81.35], [51.3, 3.9, -79.8]], new THREE.Vector3(0, .01, 0));      // tấm che xanh trên khối bể nước
+  scene.add(cladBox(40.69, 55.15, 0, .748, -92.35, -92.34));               // chân nhà mặt sau: gạch thẻ như mặt trước
+  scene.add(cladBox(55.14, 55.15, 0, .748, -92.35, -84.33));               // chân nhà mặt bên phải
+  stoneSkin(root, { x0: 39.4, x1: 40.75, z0: -92.4, z1: -84.36 });          // hè trái: cổ bậc, bệ hoa, mép hè
+  stoneSkin(root, { x0: 45.45, x1: 46.6, z0: -84.33, z1: -81.4 });          // bậc lên hiên phải (cạnh chỗ để xe)
+  return nBrown;
+}
+
+// ===== Mái tôn xanh: dải trước nhà (hiên phải) + dải hông phải; mép tường nhà cao 4.0 m, mép rào bằng đỉnh tường rào =====
+function tinTex() {                                                         // tôn sóng vuông màu xanh lá, mỗi sóng 25 cm
+  const W = 256, c = document.createElement('canvas'); c.width = W; c.height = 8; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, W, 0);
+  gr.addColorStop(0, '#2c6b2f'); gr.addColorStop(.08, '#3f8a42'); gr.addColorStop(.16, '#2c6b2f'); gr.addColorStop(.2, '#1d4d20'); gr.addColorStop(.26, '#2f7232'); gr.addColorStop(1, '#2f7232');
+  g.fillStyle = gr; g.fillRect(0, 0, W, 8);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; return t;
+}
+function addTinRoof() {
+  const HY = 4.0, FY = 3.745, RIB = .25;
+  const END = -88.89, fx = 55.48 + (END + 91.9) / 7.88 * 1.37;             // dải hông dừng ở mép cửa sổ phòng ngủ 3
+  const H = [[42.3, -84.34], [55.14, -84.34], [55.14, END]];               // mép gắn tường nhà
+  const F = [[fx, END], [56.85, -84.02], [51.28, -82.97], [51.1, -82.1], [48.28, -81.59], [42.3, -81.36]];  // mép trên tường rào
+  const P = [...H.map(p => [...p, HY]), ...F.map(p => [...p, FY])];
+  const tri = THREE.ShapeUtils.triangulateShape(P.map(([x, z]) => new THREE.Vector2(x, z)), []);
+  const pos = [], uv = [];
+  for (const t of tri) {
+    const cx = t.reduce((s, i) => s + P[i][0], 0) / 3, side = cx > 55.14;     // dải hông: sóng chạy theo x, dải trước: sóng chạy theo z
+    for (const i of t) { const [x, z, y] = P[i]; pos.push(x, y, z); uv.push(side ? z / RIB : x / RIB, 0); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tinTex(), roughness: .45, metalness: .25, side: THREE.DoubleSide }));
+  m.castShadow = m.receiveShadow = true; scene.add(m); LAYER.maiton.push(m);
+}
+
+// ===== Lớp tường rào + cổng, lớp WC, gạch thẻ trên cửa phòng thờ sáng hơn, mặt tiền trắng hơn =====
+function splitTris(root, key, testTri, skipSet) {                          // tách tam giác thoả testTri(P, mesh) thành lớp key
+  root.updateMatrixWorld(true);
+  const V = new THREE.Vector3(), meshes = [];
+  root.traverse(o => { if (o.isMesh && o.geometry.index && !skipSet.has(o)) meshes.push(o); });
+  for (const o of meshes) {
+    const g = o.geometry, p = g.attributes.position, idx = g.index.array, keep = [], take = [];
+    for (let t = 0; t < idx.length; t += 3) {
+      const P = [0, 1, 2].map(k => { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); return [V.x, V.y, V.z]; });
+      (testTri(P, o) ? take : keep).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!take.length) continue;
+    g.setIndex(keep);
+    const g2 = new THREE.BufferGeometry(); for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.setIndex(take);
+    const m2 = new THREE.Mesh(g2, o.material); m2.castShadow = m2.receiveShadow = true;
+    m2.position.copy(o.position); m2.quaternion.copy(o.quaternion); m2.scale.copy(o.scale); o.parent.add(m2); LAYER[key].push(m2); skipSet.add(m2);
+  }
+}
+function layersFenceWC(root) {
+  const used = new Set(Object.values(LAYER).flat());
+  // --- WC (khối nhô ra tường rào trước, có bể nước trên mái): mọi thứ nằm trọn trong khối
+  const inWC = q => q[0] > 48.15 && q[0] < 51.6 && q[2] > -82.7 && q[2] < -79.2 && q[1] > -.05 && q[1] < 6.3;
+  splitTris(root, 'wc', P => P.every(inWC), used);
+  // nền WC tràn hết khối: lấp đáy từ sàn WC (cốt 0.6) xuống bằng đáy nền sân, màu tường rào
+  let wallMat = null; root.traverse(o => { if (o.isMesh && o.material.name === 'default_face_material' && o.material.color.getHex() !== CREAM && !wallMat) wallMat = o.material; });
+  const W = [[48.29, -81.48], [48.48, -79.33], [51.47, -79.72], [51.16, -82.09], [51.24, -82.64], [48.25, -82.64]];
+  const cx = W.reduce((s, p) => s + p[0], 0) / W.length, cz = W.reduce((s, p) => s + p[1], 0) / W.length;
+  const Wi = W.map(([x, z]) => { const dx = cx - x, dz = cz - z, l = Math.hypot(dx, dz); return [x + dx / l * .03, z + dz / l * .03]; });  // lùi vào 3 cm: mép khuất sau chân tường
+  const shape = new THREE.Shape(Wi.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const slab = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: .6 - .005 + .012, bevelEnabled: false }), wallMat);
+  slab.rotation.x = -Math.PI / 2; slab.position.y = -.012; slab.castShadow = slab.receiveShadow = true; scene.add(slab); LAYER.wc.push(slab);
+  // --- Tường rào + cổng
+  const SEG = [[[31.785, -80.895], [48.285, -81.535]], [[31.785, -80.895], [32.355, -85.13]], [[32.355, -85.13], [32.615, -87.11]],
+    [[33.36, -92.67], [43.38, -92.4]], [[40.69, -92.34], [55.55, -92.34]], [[55.53, -91.83], [56.915, -83.975]], [[51.325, -82.92], [56.915, -83.975]],
+    [[51.1, -82.1], [51.28, -82.97]], [[51.37, -84.34], [51.37, -82.95]], [[55.2, -92.34], [55.55, -91.8]]];
+  const inSeg = (x, z) => SEG.some(([a, b]) => { const dx = b[0] - a[0], dz = b[1] - a[1], L2 = dx * dx + dz * dz, t = ((x - a[0]) * dx + (z - a[1]) * dz) / L2;
+    if (t < -.03 || t > 1.03) return false; const px = a[0] + t * dx - x, pz = a[1] + t * dz - z; return px * px + pz * pz < .19 * .19; });
+  const inGate = q => (q[0] > 32.2 && q[0] < 34.75 && q[2] > -92.1 && q[2] < -86.95)      // cổng bên trái: trụ, nan, cánh sắt, mái cổng
+    || (q[0] > 33.2 && q[0] < 33.7 && q[2] > -92.7 && q[2] < -91.2);                       // trụ góc cổng phía sau
+  const WALLS = V4.wall.names;
+  splitTris(root, 'rao', (P, o) => P.every(inGate) || (WALLS.includes(o.material.name) && o.material.color.getHex() !== CREAM && P.every(q => q[1] < 4.95 && inSeg(q[0], q[2]))), used);
+}
+function brightenBits(root) {
+  // gạch thẻ trên mép cửa phòng thờ (mặt hiên trái) sáng lên
+  root.traverse(o => { if (!o.isMesh || o.material.name !== 'Brick Tumbled') return;
+    o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+    if (b.max.x < 41.6 && b.min.y > 3) o.visible = false; });
+  scene.add(cladBox(41.465, 41.49, 3.55, 4.21, -92.34, -88.56));        // cùng loại gạch thẻ với chân nhà lối vào sân bên phải
+  // mặt tiền (các mặt tường quay về phía cổng, bên trái nhà) sáng lên cho đồng màu mặt hông đang có nắng
+  const front = new Map();
+  splitTris(root, 'mattien', (P, o) => {
+    if (o.material.color.getHex() !== CREAM) return false;
+    if (!P.every(q => Math.abs(q[0] - P[0][0]) < .003) || P[0][0] > 47) return false;   // mặt đứng song song trục z, nửa trước nhà
+    return true;
+  }, new Set(Object.values(LAYER).flat()));
+  for (const m of LAYER.mattien) { if (!front.has(m.material)) { const c = m.material.clone(); c.emissive.set(0x3a342b); front.set(m.material, c); } m.material = front.get(m.material); }
+  LAYER.mattien.length = 0;
+}
+
+// ===== Bộ màu theo ảnh render (trời xanh, tường trắng, dải chân tường xanh than, bậc đá xám, cửa gỗ vàng cam) =====
+function applyStyle2(root) {
+  const c = document.createElement('canvas'); c.width = 4; c.height = 512; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#4f8fd6'); gr.addColorStop(.55, '#9cc4ec'); gr.addColorStop(1, '#e4eef6');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 512);
+  const sky = new THREE.CanvasTexture(c); sky.colorSpace = THREE.SRGBColorSpace; scene.background = sky;
+  renderer.toneMappingExposure = 1.08; sun.color.set(0xfff4e2); sun.intensity = 2.1;
+  const done = new Set();
+  const set = (m, col, k) => { if (done.has(m)) return; done.add(m); m.color.set(col); if (k && m.map) m.map = brighten(m.map, k); m.needsUpdate = true; };
+  scene.traverse(o => {
+    if (!o.isMesh) return; const m = o.material; if (Array.isArray(m) || done.has(m)) return; const n = m.name || '';
+    if (V4.wall.names.includes(n)) set(m, m.color.getHex() === CREAM ? 0xf7f7f5 : 0xecebe7);   // tường nhà trắng, tường rào trắng ngà
+    else if (n === '<DarkGray>1') set(m, 0x2a3f6e);                                              // dải chân tường xanh than
+    else if (n === '[Roofing Shingles GAF Estates]1') set(m, 0xb9cdf6);                          // ngói xanh dương tươi
+    else if (V4.door.names.includes(n) || V4.doorPanel.names.includes(n)) set(m, 0xffbe70, 1.45); // cửa gỗ vàng cam
+    else if (n === '[Asphalt New]1') { m.map = null; set(m, 0x55585d); }                         // mặt bậc: đá xám sẫm
+    else if (n === 'Concrete Aggregate Smoke' || n === '[Concrete Aggregate Smoke]1') set(m, 0xa9abae);   // viền bậc, hè: đá xám
+  });
+  const gnd = scene.children.find(o => o.isMesh && o.geometry.type === 'PlaneGeometry'); if (gnd) gnd.material.color.set(0x6c9450);   // cỏ xung quanh
+}
+
+function setLayer(k, v) { LAYER[k].forEach(m => m.visible = v); LAYER_OFF[k].forEach(m => m.visible = !v); }
+// ---------- Bảng ẩn / hiện lớp (thêm lớp mới: thêm vào LAYERS và LAYER) ----------
+const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt'], ['maiton', 'Mái tôn'], ['rao', 'Tường rào, cổng'], ['wc', 'Nhà vệ sinh (WC)']];
+function initLayers() {
+  const box = document.getElementById('layers'), list = document.getElementById('lyList'), btn = document.getElementById('bLayer');
+  const hide0 = (params.get('hide') || '').split(',');
+  for (const [k, t] of LAYERS) {
+    const l = document.createElement('label');
+    l.innerHTML = `<input type="checkbox" data-k="${k}" ${hide0.includes(k) ? '' : 'checked'}><span>${t}</span>`;
+    l.querySelector('input').onchange = e => setLayer(k, e.target.checked); list.appendChild(l); if (hide0.includes(k)) setLayer(k, false);
+  }
+  const all = v => list.querySelectorAll('input').forEach(i => { i.checked = v; setLayer(i.dataset.k, v); });
+  document.getElementById('lyAll').onclick = () => all(true); document.getElementById('lyNone').onclick = () => all(false);
+  const tog = o => { box.classList.toggle('open', o); btn.classList.toggle('on', o); };
+  btn.onclick = () => tog(!box.classList.contains('open')); document.getElementById('lyClose').onclick = () => tog(false);
+  if (params.has('layers')) tog(true);
+}
+
+const labels = [];
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+loader.load(params.get('model') || 'model.glb', g => {
+  const root = g.scene;
+  root.traverse(o => {
+    if (o.isMesh) {
+      o.castShadow = o.receiveShadow = true;
+      const ms = Array.isArray(o.material) ? o.material : [o.material];
+      ms.forEach(m => { m.side = THREE.DoubleSide; if (m.map) m.map.anisotropy = 8; });
+    }
+  });
+  applyV4(root);
+  scene.add(root);
+  splitModel(root);
+  scene.add(cladding(39.49, 55.14, 0, .748, -84.338, .01));  // chân nhà mặt trước: từ hiên trái đến lối đi bên phải
+  boxLayer(root, 'tudong', [49.6, .595, -84.36], [50.8, 1.45, -83.74],   // tủ đông dưới cửa sổ bếp
+    ['default_face_material', '<DarkGray>1', 'Concrete Aggregate Smoke', 'Brick Tumbled', 'Rough Square Concrete Block']);
+  addScooters();
+  recolorHouse(root);
+  boxLayer(root, 'maygiat', [55.1, .59, -85.0], [55.95, 1.45, -84.28],      // máy giặt ở lối đi bên phải nhà
+    ['default_face_material', 'default_face_material85', 'Concrete Aggregate Smoke', 'Brick Tumbled', 'Rough Square Concrete Block']);
+  boxLayer(root, 'maygiat', [55.7, .85, -84.84], [55.77, 1.2, -84.44], []);  // viền cửa máy giặt (dùng chung vật liệu tường)
+  window.__skin = fixFlicker(root);
+  addTinRoof();
+  layersFenceWC(root);
+  brightenBits(root);
+  initLayers();
+  const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
+  box.getCenter(C); C.y = box.min.y; R = Math.max(size.x, size.z) * .75;
+  controls.maxDistance = R * 8; controls.minDistance = .3;
+  camera.near = .1; camera.far = R * 20; camera.updateProjectionMatrix();
+  // mặt trời chiếu xiên, vùng bóng phủ toàn nhà
+  sun.position.set(C.x - R * .8, C.y + R * 1.6, C.z + R * .6); sun.target.position.copy(C);
+  Object.assign(sun.shadow.camera, { left: -R * 1.3, right: R * 1.3, top: R * 1.3, bottom: -R * 1.3, near: .1, far: R * 6 });
+  sun.shadow.camera.updateProjectionMatrix();
+  // nền
+  const gnd = new THREE.Mesh(new THREE.PlaneGeometry(R * 12, R * 12), new THREE.MeshStandardMaterial({ color: 0xf2f1ee, roughness: 1 }));
+  gnd.rotation.x = -Math.PI / 2; gnd.position.set(C.x, box.min.y - .08, C.z); gnd.receiveShadow = true; scene.add(gnd);
+  for (const [t, s, x, z, y] of LABELS) {
+    const d = document.createElement('div'); d.className = 'lbl'; d.innerHTML = `<b>${t}</b>${s || ''}`;
+    const o = new CSS2DObject(d); o.position.set(x, y ?? box.min.y + (box.max.y - box.min.y) * .72, z); scene.add(o); labels.push(o);
+  }
+  if (SHOT && !params.has('labels')) labels.forEach(l => l.visible = false);
+  if (STYLE2) applyStyle2(root);
+  setView(params.get('view') || 'iso');
+  if (params.get('cam')) { const v = params.get('cam').split(',').map(Number); camera.position.set(v[0], v[1], v[2]); controls.target.set(v[3], v[4], v[5]); controls.update(); }
+  document.getElementById('load').remove();
+  window.__ready = true; window.__box = box; window.__root = root;
+}, e => { if (e.total) document.getElementById('pct').textContent = Math.round(e.loaded / e.total * 100) + '%'; },
+  err => { document.getElementById('load').textContent = 'Không tải được mô hình: ' + err.message + ' (hãy mở qua máy chủ web, xem HUONG-DAN.txt)'; });
+
+(document.getElementById('bLbl')||{}).onclick = () => labels.forEach(l => l.visible = !l.visible);
+document.getElementById('bShadow').onclick = () => { sun.castShadow = !sun.castShadow; };
+document.getElementById('bPng').onclick = () => {
+  const p0 = renderer.getPixelRatio(); renderer.setPixelRatio(MOBILE ? 2 : 3); renderer.setSize(innerWidth, innerHeight); renderer.render(scene, camera);
+  const a = document.createElement('a'); a.href = renderer.domElement.toDataURL('image/png'); a.download = 'mo-hinh-3d.png'; a.click();
+  renderer.setPixelRatio(p0); renderer.setSize(innerWidth, innerHeight);
+};
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); lblR.setSize(innerWidth, innerHeight); });
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); lblR.render(scene, camera); });
+</script>
+</body>
+</html>
