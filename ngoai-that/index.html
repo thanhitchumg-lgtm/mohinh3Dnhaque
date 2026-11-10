@@ -77,7 +77,7 @@ const LABELS = []; // mô hình ngoại thất: không đặt nhãn phòng
 
 const params = new URLSearchParams(location.search);
 const SHOT = params.has('shot');
-const STYLE2 = !params.has('mau-cu');   // BẢN MÀU MỚI theo ảnh render (thêm ?mau-cu để xem màu cũ)
+const STYLE2 = !params.has('mau-cu');   // bộ màu theo ảnh render (bản chính); thêm ?mau-cu để xem màu cũ
 const MOBILE = matchMedia('(pointer:coarse)').matches || innerWidth < 800;
 if (MOBILE) document.getElementById('hint').textContent = '1 ngón: xoay · 2 ngón: phóng to / kéo';
 document.getElementById('tg').onclick = () => document.getElementById('ui').classList.toggle('min');
@@ -257,7 +257,7 @@ function cladBox(x0, x1, y0, y1, z0, z1) {               // tấm ốp gạch th
 }
 
 // ===== Lớp phòng thờ 2 + thay mặt sân trống bằng gạch =====
-const LAYER = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
+const LAYER = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [], nha: [], khac: [] }, LAYER_OFF = { tho2: [], tudong: [], xemay: [], maygiat: [], maiton: [], rao: [], wc: [], mattien: [], nha: [], khac: [] };      // LAYER_OFF: vật chỉ hiện khi lớp đó tắt (nền gạch dưới phòng)
 const ROOM = { x0: 31.75, x1: 36.85, z0: -85.95, z1: -80.9 }; // vùng phòng thờ 2 (m)
 // tường rào bên trái (đoạn chung với phòng thờ 2): mặt ngoài A→B, mặt trong C→D
 const FA = [31.723, -80.835], FB = [32.296, -85.127], FC = [31.849, -80.948];
@@ -650,9 +650,41 @@ function applyStyle2(root) {
   const gnd = scene.children.find(o => o.isMesh && o.geometry.type === 'PlaneGeometry'); if (gnd) gnd.material.color.set(0x6c9450);   // cỏ xung quanh
 }
 
+// ===== Lớp "Nhà chính" (nhà + hè + bậc) và lớp "Sân vườn, khác" (mọi thứ còn lại chưa có lớp) =====
+function layerHouseRest(root) {
+  const used = new Set();
+  for (const arr of [...Object.values(LAYER), ...Object.values(LAYER_OFF)]) for (const o of arr) o.traverse(c => used.add(c));
+  // vùng nhà: thân nhà + hiên/5 bậc trái; hè trước phải, hè hông phải, trụ góc, tường + cửa nối WC → lớp sân vườn
+  const inHouse = (x, y, z) => (x > 39.3 && x < 55.15 && z > -92.45 && z < -84.3)
+    || (x > 55.1 && x < 55.26 && z > -92.45 && z < -84.3 && y > .65)        // khung cửa, bậu cửa trên tường hông phải
+    || (y > 3.75 && x > 39 && x < 55.8 && z > -92.7 && z < -83.6);          // mái, diềm mái, cục nóng điều hoà
+  const meshes = [];
+  scene.traverse(o => { if (o.isMesh && !used.has(o) && o.visible) meshes.push(o); });
+  const V = new THREE.Vector3();
+  for (const o of meshes) {
+    if (o.material === mTile || o.geometry.type === 'PlaneGeometry') { LAYER.khac.push(o); continue; }   // gạch sân, nền cỏ
+    const g = o.geometry, p = g.attributes.position;
+    if (!g.index) g.setIndex([...Array(p.count).keys()]);
+    const idx = g.index.array, A = [], B = [];
+    o.updateMatrixWorld(true);
+    for (let t = 0; t < idx.length; t += 3) {
+      let cx = 0, cy = 0, cz = 0, mx = -1e9;
+      for (let k = 0; k < 3; k++) { V.fromBufferAttribute(p, idx[t + k]).applyMatrix4(o.matrixWorld); cx += V.x; cy += V.y; cz += V.z; mx = Math.max(mx, V.x); }
+      const own = inHouse(cx / 3, cy / 3, cz / 3) && !(mx > 55.3 && cy / 3 < .7);   // mặt chân hè phải chìa ra ngoài nhà → sân vườn
+      (own ? A : B).push(idx[t], idx[t + 1], idx[t + 2]);
+    }
+    if (!B.length) { LAYER.nha.push(o); continue; }
+    if (!A.length) { LAYER.khac.push(o); continue; }
+    g.setIndex(A); LAYER.nha.push(o);
+    const g2 = new THREE.BufferGeometry(); for (const k in g.attributes) g2.setAttribute(k, g.attributes[k]); g2.setIndex(B);
+    const m2 = new THREE.Mesh(g2, o.material); m2.castShadow = o.castShadow; m2.receiveShadow = o.receiveShadow;
+    m2.position.copy(o.position); m2.quaternion.copy(o.quaternion); m2.scale.copy(o.scale); o.parent.add(m2); LAYER.khac.push(m2);
+  }
+}
+
 function setLayer(k, v) { LAYER[k].forEach(m => m.visible = v); LAYER_OFF[k].forEach(m => m.visible = !v); }
 // ---------- Bảng ẩn / hiện lớp (thêm lớp mới: thêm vào LAYERS và LAYER) ----------
-const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt'], ['maiton', 'Mái tôn'], ['rao', 'Tường rào, cổng'], ['wc', 'Nhà vệ sinh (WC)']];
+const LAYERS = [['nha', 'Nhà chính'], ['khac', 'Sân vườn, khác'], ['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt'], ['maiton', 'Mái tôn'], ['rao', 'Tường rào, cổng'], ['wc', 'Nhà vệ sinh (WC)']];
 function initLayers() {
   const box = document.getElementById('layers'), list = document.getElementById('lyList'), btn = document.getElementById('bLayer');
   const hide0 = (params.get('hide') || '').split(',');
@@ -694,7 +726,6 @@ loader.load(params.get('model') || 'model.glb', g => {
   addTinRoof();
   layersFenceWC(root);
   brightenBits(root);
-  initLayers();
   const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3());
   box.getCenter(C); C.y = box.min.y; R = Math.max(size.x, size.z) * .75;
   controls.maxDistance = R * 8; controls.minDistance = .3;
@@ -712,6 +743,9 @@ loader.load(params.get('model') || 'model.glb', g => {
   }
   if (SHOT && !params.has('labels')) labels.forEach(l => l.visible = false);
   if (STYLE2) applyStyle2(root);
+  layerHouseRest(root);
+  { const c = cladBox(55.15, 55.17, 0, .748, -92.34, -84.32); scene.add(c); LAYER.nha.push(c); }   // ốp đá chân tường hông phải (x = 55.14), dày 2 cm
+  initLayers();
   setView(params.get('view') || 'iso');
   if (params.get('cam')) { const v = params.get('cam').split(',').map(Number); camera.position.set(v[0], v[1], v[2]); controls.target.set(v[3], v[4], v[5]); controls.update(); }
   document.getElementById('load').remove();
