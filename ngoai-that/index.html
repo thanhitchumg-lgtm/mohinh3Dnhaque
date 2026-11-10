@@ -77,6 +77,7 @@ const LABELS = []; // mô hình ngoại thất: không đặt nhãn phòng
 
 const params = new URLSearchParams(location.search);
 const SHOT = params.has('shot');
+const STYLE2 = !params.has('mau-cu');   // BẢN MÀU MỚI theo ảnh render (thêm ?mau-cu để xem màu cũ)
 const MOBILE = matchMedia('(pointer:coarse)').matches || innerWidth < 800;
 if (MOBILE) document.getElementById('hint').textContent = '1 ngón: xoay · 2 ngón: phóng to / kéo';
 document.getElementById('tg').onclick = () => document.getElementById('ui').classList.toggle('min');
@@ -192,7 +193,7 @@ function slateTex() {
   for (let r = 0; r < 4; r++) for (let k = -1; k < 2; k++) {
     const x = k * TW + (r % 2) * TW / 2, y = r * TH;
     g.save(); g.beginPath(); g.rect(x + J / 2, y + J / 2, TW - J, TH - J); g.clip();
-    const v = rnd(-7, 7); g.fillStyle = `rgb(${54 + v},${61 + v},${70 + v})`; g.fillRect(x, y, TW, TH);
+    const v = rnd(-7, 7), B = STYLE2 ? [104, 110, 118] : [54, 61, 70]; g.fillStyle = `rgb(${B[0] + v},${B[1] + v},${B[2] + v})`; g.fillRect(x, y, TW, TH);
     for (let i = 0; i < 900; i++) {                         // vân đá: vệt sáng tối mảnh, chạy xiên
       const a = rnd(.03, .1), l = Math.random() < .5;
       g.fillStyle = l ? `rgba(150,160,172,${a})` : `rgba(25,30,36,${a})`;
@@ -214,7 +215,24 @@ function tileMesh(tris, y) {                               // tris: mảng [x,z]
 }
 
 // ===== Gạch thẻ ốp chân nhà mặt trước (dày 1 cm, phủ lên dải mặt bị chồng hình gây nháy) =====
+function ledgeTex() { // đá ốp lát mỏng kiểu ảnh render: thanh đá dài ngắn xen kẽ, xám – be – nâu
+  const S = 1024, c = document.createElement('canvas'); c.width = 2 * S; c.height = S; const g = c.getContext('2d');
+  g.fillStyle = '#3e3b37'; g.fillRect(0, 0, 2 * S, S);
+  const PAL = [[150, 142, 130], [118, 112, 104], [96, 92, 88], [172, 162, 144], [128, 116, 100], [84, 82, 80]];
+  for (let y = 0; y < S; ) {
+    const h = 26 + Math.random() * 30;
+    for (let x = -Math.random() * 120; x < 2 * S; ) {
+      const w = 90 + Math.random() * 260, p = PAL[Math.random() * PAL.length | 0], v = Math.random() * 20 - 10;
+      g.fillStyle = `rgb(${p[0] + v | 0},${p[1] + v | 0},${p[2] + v | 0})`; g.fillRect(x + 3, y + 3, w - 6, h - 6);
+      for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(${Math.random() < .5 ? '255,250,240' : '30,28,25'},${Math.random() * .18})`; g.fillRect(x + 3 + Math.random() * (w - 8), y + 3 + Math.random() * (h - 8), 3 + Math.random() * 14, 1 + Math.random() * 3); }
+      x += w;
+    }
+    y += h;
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16; return t;
+}
 function brickTex() { // gạch thẻ 24×6 cm, tông xám trắng lẫn nâu đỏ (giống bên nội thất), ảnh phủ 2 m ngang × 1 m cao
+  if (STYLE2) return ledgeTex();
   const S = 1024, c = document.createElement('canvas'); c.width = 2 * S; c.height = S; const g = c.getContext('2d');
   g.fillStyle = '#5f5d5a'; g.fillRect(0, 0, 2 * S, S);                 // mạch vữa (sẫm, hợp với gạch lát sân)
   const bw = S / 4, bh = S / 16;
@@ -611,6 +629,27 @@ function brightenBits(root) {
   LAYER.mattien.length = 0;
 }
 
+// ===== Bộ màu theo ảnh render (trời xanh, tường trắng, dải chân tường xanh than, bậc đá xám, cửa gỗ vàng cam) =====
+function applyStyle2(root) {
+  const c = document.createElement('canvas'); c.width = 4; c.height = 512; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#4f8fd6'); gr.addColorStop(.55, '#9cc4ec'); gr.addColorStop(1, '#e4eef6');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 512);
+  const sky = new THREE.CanvasTexture(c); sky.colorSpace = THREE.SRGBColorSpace; scene.background = sky;
+  renderer.toneMappingExposure = 1.08; sun.color.set(0xfff4e2); sun.intensity = 2.1;
+  const done = new Set();
+  const set = (m, col, k) => { if (done.has(m)) return; done.add(m); m.color.set(col); if (k && m.map) m.map = brighten(m.map, k); m.needsUpdate = true; };
+  scene.traverse(o => {
+    if (!o.isMesh) return; const m = o.material; if (Array.isArray(m) || done.has(m)) return; const n = m.name || '';
+    if (V4.wall.names.includes(n)) set(m, m.color.getHex() === CREAM ? 0xf7f7f5 : 0xecebe7);   // tường nhà trắng, tường rào trắng ngà
+    else if (n === '<DarkGray>1') set(m, 0x2a3f6e);                                              // dải chân tường xanh than
+    else if (n === '[Roofing Shingles GAF Estates]1') set(m, 0xb9cdf6);                          // ngói xanh dương tươi
+    else if (V4.door.names.includes(n) || V4.doorPanel.names.includes(n)) set(m, 0xffbe70, 1.45); // cửa gỗ vàng cam
+    else if (n === '[Asphalt New]1') { m.map = null; set(m, 0x55585d); }                         // mặt bậc: đá xám sẫm
+    else if (n === 'Concrete Aggregate Smoke' || n === '[Concrete Aggregate Smoke]1') set(m, 0xa9abae);   // viền bậc, hè: đá xám
+  });
+  const gnd = scene.children.find(o => o.isMesh && o.geometry.type === 'PlaneGeometry'); if (gnd) gnd.material.color.set(0x6c9450);   // cỏ xung quanh
+}
+
 function setLayer(k, v) { LAYER[k].forEach(m => m.visible = v); LAYER_OFF[k].forEach(m => m.visible = !v); }
 // ---------- Bảng ẩn / hiện lớp (thêm lớp mới: thêm vào LAYERS và LAYER) ----------
 const LAYERS = [['tho2', 'Phòng thờ 2'], ['tudong', 'Tủ đông'], ['xemay', 'Xe máy'], ['maygiat', 'Máy giặt'], ['maiton', 'Mái tôn'], ['rao', 'Tường rào, cổng'], ['wc', 'Nhà vệ sinh (WC)']];
@@ -672,6 +711,7 @@ loader.load(params.get('model') || 'model.glb', g => {
     const o = new CSS2DObject(d); o.position.set(x, y ?? box.min.y + (box.max.y - box.min.y) * .72, z); scene.add(o); labels.push(o);
   }
   if (SHOT && !params.has('labels')) labels.forEach(l => l.visible = false);
+  if (STYLE2) applyStyle2(root);
   setView(params.get('view') || 'iso');
   if (params.get('cam')) { const v = params.get('cam').split(',').map(Number); camera.position.set(v[0], v[1], v[2]); controls.target.set(v[3], v[4], v[5]); controls.update(); }
   document.getElementById('load').remove();
