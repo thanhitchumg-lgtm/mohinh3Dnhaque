@@ -748,10 +748,35 @@ document.getElementById('bIso').onclick = () => setView('iso');
 document.getElementById('bIso2').onclick = () => setView('iso2');
 document.getElementById('bTop').onclick = () => setView('top');
 document.getElementById('bLbl').onclick = () => labels.forEach(l => l.visible = !l.visible);
+// ---- Lưu ảnh: iPhone/iPad dùng bảng Chia sẻ (chọn "Lưu hình ảnh"); không được thì hiện ảnh để nhấn giữ lưu ----
+function savePNG(canvas, name) {
+  let url = canvas.toDataURL('image/png');
+  if (url.length < 100) return alert('Ảnh quá lớn, không lưu được. Hãy thu nhỏ cửa sổ rồi thử lại.');
+  const bin = atob(url.split(',')[1]), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  const blob = new Blob([u8], { type: 'image/png' });
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let file = null; try { file = new File([blob], name, { type: 'image/png' }); } catch (e) {}
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file] }).catch(err => { if (err && err.name !== 'AbortError') showPNG(url); });
+    return;
+  }
+  if (IOS) return showPNG(url);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function showPNG(url) {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;gap:10px';
+  d.innerHTML = '<div style="color:#fff;font:14px sans-serif;text-align:center">Nhấn giữ vào ảnh → chọn <b>Lưu vào Ảnh</b></div>' +
+    '<img style="max-width:100%;max-height:78vh;border-radius:6px;-webkit-touch-callout:default">' +
+    '<button style="padding:9px 22px;border:0;border-radius:8px;font-size:15px">Đóng</button>';
+  d.querySelector('img').src = url; d.querySelector('button').onclick = () => d.remove(); document.body.appendChild(d);
+}
 document.getElementById('bPng').onclick = () => {
   const pr0 = renderer.getPixelRatio(); renderer.setPixelRatio(MOBILE ? 2 : 3); renderer.setSize(innerWidth, innerHeight);
   renderer.render(scene, camera);
-  const a = document.createElement('a'); a.href = renderer.domElement.toDataURL('image/png'); a.download = 'phoi-canh-3d.png'; a.click();
+  savePNG(renderer.domElement, 'phoi-canh-3d.png');
   renderer.setPixelRatio(pr0); renderer.setSize(innerWidth, innerHeight);
 };
 addEventListener('resize', () => {
