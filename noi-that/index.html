@@ -86,7 +86,7 @@ const H = 2.7;      // chiều cao tường (kịch trần)
 const HC = 1.0;     // tường phía trước bị cắt
 
 // ---------- Renderer ----------
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true });   // độ sâu logarit: hết nháy mặt sát nhau trên điện thoại
 renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 3 : 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
@@ -402,9 +402,11 @@ floorRect(335, 413, 1685, 843, wF(335, 413, 1685, 843));          // khách - b�
 floorRect(310, 505, 335, 771, wF(310, 505, 335, 771), .0015);     // ngưỡng cửa sảnh
 floorRect(812, 843, 938, 867, wF(812, 843, 938, 867), .0015);     // ngưỡng cửa chính
 floorRect(225, 405, 600, 413, wF(225, 405, 600, 413), .0015);
-{ // nền lót cùng gạch nằm thấp hơn mặt sàn 5 mm: lấp khe nối giữa các tấm sàn ở cửa ra vào (hết đường đen)
-  const u = new THREE.Mesh(new THREE.PlaneGeometry(X(1690) - X(225), Z(866) - Z(10)), mTileAll);
-  u.rotation.x = -Math.PI / 2; u.position.set((X(225) + X(1690)) / 2, .015, (Z(10) + Z(866)) / 2);
+// nền lót cùng gạch thấp hơn mặt sàn: lấp khe nối giữa các tấm sàn ở cửa ra vào (hết đường đen)
+// chỉ đặt dưới vùng lát gạch – KHÔNG nằm dưới sàn phòng thờ và sảnh hè (tránh chồng lớp gây nháy trên điện thoại)
+for (const [a, b, c, d] of [[600, 10, 1690, 413], [310, 413, 1690, 866]]) {
+  const u = new THREE.Mesh(new THREE.PlaneGeometry(X(c) - X(a), Z(d) - Z(b)), mTileAll);
+  u.rotation.x = -Math.PI / 2; u.position.set((X(a) + X(c)) / 2, .01, (Z(b) + Z(d)) / 2);
   const g = mTileAll.userData.grid, uv = u.geometry.attributes.uv, p = u.geometry.attributes.position, cx = u.position.x, cz = u.position.z;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, (cx + p.getX(i) - g.x0) / g.s, (g.z0 - (cz - p.getY(i))) / g.s);
   u.receiveShadow = true; scene.add(u);
@@ -731,7 +733,7 @@ label('PN4', 'S = 9.0 m²', 1460, 580); label('SẢNH', '', 220, 640);
 if (SHOT && !params.has('labels')) labels.forEach(l => l.visible = false);
 
 // ---------- Camera ----------
-const camera = new THREE.PerspectiveCamera(22, innerWidth / innerHeight, .1, 300);
+const camera = new THREE.PerspectiveCamera(22, innerWidth / innerHeight, .1, 200);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; controls.maxPolarAngle = Math.PI / 2.1;
 const views = {
